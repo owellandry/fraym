@@ -1,15 +1,6 @@
 #!/bin/bash
 set -e
 
-# ─── Open terminal for user input (needed when piped via curl | bash) ───
-exec 3</dev/tty 2>/dev/null || exec 3<&0
-
-ask() {
-  echo -en "$1" >&2
-  read REPLY <&3
-  echo "$REPLY"
-}
-
 # ─── Colors ───
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -88,7 +79,9 @@ if [ "$NEED_KEY" = true ]; then
   echo -e "       ${BOLD}OpenRouter API Key${NC} ${DIM}(para detección de momentos con IA)${NC}"
   echo -e "       ${DIM}Obtén una gratis en:${NC} ${CYAN}https://openrouter.ai/keys${NC}"
   echo ""
-  API_KEY=$(ask "       Pega tu key (Enter para saltar): ")
+  printf "       Pega tu key (Enter para saltar): "
+  API_KEY=""
+  read API_KEY </dev/tty || true
   if [ -n "$API_KEY" ]; then
     echo "OPENROUTER_API_KEY=$API_KEY" > .env
     ok "API key guardada"
@@ -134,6 +127,3 @@ echo -e "    ${BOLD}fraym stop${NC}      → docker compose -f $INSTALL_DIR/dock
 echo -e "    ${BOLD}fraym restart${NC}   → docker compose -f $INSTALL_DIR/docker-compose.yml up -d"
 echo -e "    ${BOLD}fraym update${NC}    → curl -fsSL https://raw.githubusercontent.com/owellandry/fraym/master/install.sh | bash"
 echo ""
-
-# Cleanup fd
-exec 3<&-
