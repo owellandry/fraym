@@ -1,0 +1,18 @@
+services:
+  fraym:
+    build: .
+    ports:
+      - "9977:9977"
+    env_file:
+      - .env
+    environment:
+      - PORT=9977
+      - NODE_ENV=production
+    volumes:
+      - fraym_tmp:/app/tmp
+      - fraym_outputs:/app/public/outputs
+    restart: unless-stopped
+
+volumes:
+  fraym_tmp:
+  fraym_outputs:

@@ -1,0 +1,8 @@
+node_modules
+tmp
+public/outputs
+.git
+*.pen
+favicon/
+shorts.pen
+.claude
