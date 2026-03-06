@@ -35,7 +35,7 @@ if [ -d "$INSTALL_DIR" ]; then
   git pull --ff-only 2>/dev/null || true
 else
   echo -e "${CYAN}→${NC} Descargando..."
-  git clone https://github.com/burgerdev0/fraym.git "$INSTALL_DIR"
+  git clone https://github.com/owellandry/fraym.git "$INSTALL_DIR"
   cd "$INSTALL_DIR"
 fi
 
