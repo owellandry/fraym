@@ -84,8 +84,10 @@ export async function downloadVideo(url: string, jobId: string): Promise<string>
       "--concurrent-fragments", "4",
       "--no-mtime",
       "--no-part",
-      "--js-runtimes", "nodejs",
-      "--extractor-args", "youtube:player_client=web,default",
+      "--js-runtimes", "node,bun",
+      ...(process.env.BGUTIL_BASE_URL
+        ? ["--extractor-args", `youtubepot-bgutilhttp:base_url=${process.env.BGUTIL_BASE_URL}`]
+        : []),
       "-o", outputPath,
       "--no-playlist",
       url,
@@ -156,8 +158,10 @@ export async function extractSubtitles(videoPath: string, jobId: string): Promis
       "--sub-lang", "en,es",
       "--sub-format", "srt",
       "--skip-download",
-      "--js-runtimes", "nodejs",
-      "--extractor-args", "youtube:player_client=web,default",
+      "--js-runtimes", "node,bun",
+      ...(process.env.BGUTIL_BASE_URL
+        ? ["--extractor-args", `youtubepot-bgutilhttp:base_url=${process.env.BGUTIL_BASE_URL}`]
+        : []),
       "-o", path.join(TMP_DIR, jobId),
       videoPath,
     ]);

@@ -8,9 +8,17 @@ services:
     environment:
       - PORT=9977
       - NODE_ENV=production
+      - BGUTIL_BASE_URL=http://bgutil:4416
     volumes:
       - fraym_tmp:/app/tmp
       - fraym_outputs:/app/public/outputs
+    depends_on:
+      - bgutil
+    restart: unless-stopped
+
+  bgutil:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    init: true
     restart: unless-stopped
 
 volumes:
