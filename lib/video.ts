@@ -84,6 +84,8 @@ export async function downloadVideo(url: string, jobId: string): Promise<string>
       "--concurrent-fragments", "4",
       "--no-mtime",
       "--no-part",
+      "--js-runtimes", "nodejs",
+      "--extractor-args", "youtube:player_client=web,default",
       "-o", outputPath,
       "--no-playlist",
       url,
@@ -154,6 +156,8 @@ export async function extractSubtitles(videoPath: string, jobId: string): Promis
       "--sub-lang", "en,es",
       "--sub-format", "srt",
       "--skip-download",
+      "--js-runtimes", "nodejs",
+      "--extractor-args", "youtube:player_client=web,default",
       "-o", path.join(TMP_DIR, jobId),
       videoPath,
     ]);
