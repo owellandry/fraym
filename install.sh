@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 
+# ─── Open terminal for user input (needed when piped via curl | bash) ───
+exec 3</dev/tty 2>/dev/null || exec 3<&0
+
+ask() {
+  echo -en "$1" >&2
+  read REPLY <&3
+  echo "$REPLY"
+}
+
 # ─── Colors ───
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -31,7 +40,7 @@ step 1 "Verificando requisitos..."
 if ! command -v docker &> /dev/null; then
   fail "Docker no está instalado.\n       Instálalo con: ${CYAN}curl -fsSL https://get.docker.com | sh${NC}"
 fi
-ok "Docker $(docker --version | grep -oP '\d+\.\d+\.\d+')"
+ok "Docker $(docker --version | grep -oP '\d+\.\d+\.\d+' || echo 'OK')"
 
 if ! docker compose version &> /dev/null; then
   fail "Docker Compose no disponible."
@@ -61,30 +70,25 @@ fi
 # ─── Step 3: Configure ───
 step 3 "Configurando..."
 
+NEED_KEY=false
+
 if [ -f .env ]; then
-  # Check if key is empty
-  EXISTING_KEY=$(grep -oP 'OPENROUTER_API_KEY=\K.*' .env 2>/dev/null || true)
+  EXISTING_KEY=$(grep 'OPENROUTER_API_KEY=' .env 2>/dev/null | cut -d'=' -f2-)
   if [ -n "$EXISTING_KEY" ]; then
     ok "API key encontrada en .env"
   else
-    echo ""
-    echo -e "       ${BOLD}OpenRouter API Key${NC} ${DIM}(para detección de momentos con IA)${NC}"
-    echo -e "       ${DIM}Obtén una gratis en:${NC} ${CYAN}https://openrouter.ai/keys${NC}"
-    echo ""
-    read -p "       Pega tu key: " API_KEY < /dev/tty
-    if [ -n "$API_KEY" ]; then
-      echo "OPENROUTER_API_KEY=$API_KEY" > .env
-      ok "API key guardada"
-    else
-      warn "Sin API key — se usarán heurísticas (menos precisión)"
-    fi
+    NEED_KEY=true
   fi
 else
+  NEED_KEY=true
+fi
+
+if [ "$NEED_KEY" = true ]; then
   echo ""
   echo -e "       ${BOLD}OpenRouter API Key${NC} ${DIM}(para detección de momentos con IA)${NC}"
   echo -e "       ${DIM}Obtén una gratis en:${NC} ${CYAN}https://openrouter.ai/keys${NC}"
   echo ""
-  read -p "       Pega tu key: " API_KEY < /dev/tty
+  API_KEY=$(ask "       Pega tu key (Enter para saltar): ")
   if [ -n "$API_KEY" ]; then
     echo "OPENROUTER_API_KEY=$API_KEY" > .env
     ok "API key guardada"
@@ -130,3 +134,6 @@ echo -e "    ${BOLD}fraym stop${NC}      → docker compose -f $INSTALL_DIR/dock
 echo -e "    ${BOLD}fraym restart${NC}   → docker compose -f $INSTALL_DIR/docker-compose.yml up -d"
 echo -e "    ${BOLD}fraym update${NC}    → curl -fsSL https://raw.githubusercontent.com/owellandry/fraym/master/install.sh | bash"
 echo ""
+
+# Cleanup fd
+exec 3<&-
