@@ -84,7 +84,7 @@ else
   echo -e "       ${BOLD}OpenRouter API Key${NC} ${DIM}(para detección de momentos con IA)${NC}"
   echo -e "       ${DIM}Obtén una gratis en:${NC} ${CYAN}https://openrouter.ai/keys${NC}"
   echo ""
-  read -p "       Pega tu key: " API_KEY
+  read -p "       Pega tu key: " API_KEY < /dev/tty
   if [ -n "$API_KEY" ]; then
     echo "OPENROUTER_API_KEY=$API_KEY" > .env
     ok "API key guardada"
