@@ -149,20 +149,17 @@ export function generateEvenSegments(duration: number, count: number = 4, segDur
 
 function positionTitle(index: number, total: number, start: number, duration: number): string {
   const pct = start / duration;
-  const m = Math.floor(start / 60);
-  const s = Math.floor(start % 60);
-  const ts = `${m}:${s.toString().padStart(2, "0")}`;
 
   if (total <= 2) {
-    return index === 0 ? `Mejor momento (${ts})` : `Segundo momento (${ts})`;
+    return index === 0 ? "Mejor momento" : "Segundo momento";
   }
 
-  if (pct < 0.15) return `Inicio destacado (${ts})`;
-  if (pct < 0.35) return `Primer acto (${ts})`;
-  if (pct < 0.55) return `Momento central (${ts})`;
-  if (pct < 0.75) return `Punto clave (${ts})`;
-  if (pct < 0.9) return `Climax (${ts})`;
-  return `Final destacado (${ts})`;
+  if (pct < 0.15) return "Inicio destacado";
+  if (pct < 0.35) return "Primer acto";
+  if (pct < 0.55) return "Momento central";
+  if (pct < 0.75) return "Punto clave";
+  if (pct < 0.9) return "Climax";
+  return "Final destacado";
 }
 
 export function detectWithHeuristics(
