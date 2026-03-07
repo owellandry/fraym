@@ -130,23 +130,43 @@ docker compose up -d
 
 ok "Contenedor corriendo"
 
+# ─── Install CLI ───
+chmod +x "$INSTALL_DIR/scripts/fraym.sh"
+
+# Create global symlink
+if [ -d "/usr/local/bin" ]; then
+  ln -sf "$INSTALL_DIR/scripts/fraym.sh" /usr/local/bin/fraym 2>/dev/null || true
+  if command -v fraym &>/dev/null; then
+    ok "CLI instalado: ${BOLD}fraym${NC}"
+  else
+    warn "No se pudo crear symlink en /usr/local/bin"
+    echo -e "       ${DIM}Puedes usar directamente:${NC} ${CYAN}bash $INSTALL_DIR/scripts/fraym.sh${NC}"
+  fi
+fi
+
 # ─── Get server IP ───
 SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
 # ─── Done ───
 echo ""
-echo -e "  ${GREEN}${BOLD}┌─────────────────────────────────────┐${NC}"
-echo -e "  ${GREEN}${BOLD}│${NC}                                     ${GREEN}${BOLD}│${NC}"
-echo -e "  ${GREEN}${BOLD}│${NC}   ${GREEN}${BOLD}✓ fraym está listo${NC}                 ${GREEN}${BOLD}│${NC}"
-echo -e "  ${GREEN}${BOLD}│${NC}                                     ${GREEN}${BOLD}│${NC}"
-echo -e "  ${GREEN}${BOLD}│${NC}   ${BOLD}Local:${NC}    http://localhost:9977    ${GREEN}${BOLD}│${NC}"
-echo -e "  ${GREEN}${BOLD}│${NC}   ${BOLD}Red:${NC}      http://${SERVER_IP}:9977  ${GREEN}${BOLD}│${NC}"
-echo -e "  ${GREEN}${BOLD}│${NC}                                     ${GREEN}${BOLD}│${NC}"
-echo -e "  ${GREEN}${BOLD}└─────────────────────────────────────┘${NC}"
+echo -e "  ${GREEN}${BOLD}┌──────────────────────────────────────────┐${NC}"
+echo -e "  ${GREEN}${BOLD}│${NC}                                          ${GREEN}${BOLD}│${NC}"
+echo -e "  ${GREEN}${BOLD}│${NC}   ${GREEN}${BOLD}✓ fraym está listo${NC}                      ${GREEN}${BOLD}│${NC}"
+echo -e "  ${GREEN}${BOLD}│${NC}                                          ${GREEN}${BOLD}│${NC}"
+echo -e "  ${GREEN}${BOLD}│${NC}   ${BOLD}Local:${NC}  http://localhost:9977           ${GREEN}${BOLD}│${NC}"
+echo -e "  ${GREEN}${BOLD}│${NC}   ${BOLD}Red:${NC}    http://${SERVER_IP}:9977     ${GREEN}${BOLD}│${NC}"
+echo -e "  ${GREEN}${BOLD}│${NC}                                          ${GREEN}${BOLD}│${NC}"
+echo -e "  ${GREEN}${BOLD}└──────────────────────────────────────────┘${NC}"
 echo ""
-echo -e "  ${DIM}Comandos:${NC}"
-echo -e "    ${BOLD}fraym logs${NC}      → docker compose -f $INSTALL_DIR/docker-compose.yml logs -f"
-echo -e "    ${BOLD}fraym stop${NC}      → docker compose -f $INSTALL_DIR/docker-compose.yml down"
-echo -e "    ${BOLD}fraym restart${NC}   → docker compose -f $INSTALL_DIR/docker-compose.yml up -d"
-echo -e "    ${BOLD}fraym update${NC}    → curl -fsSL https://raw.githubusercontent.com/owellandry/fraym/master/install.sh | bash"
+echo -e "  ${BOLD}Comandos disponibles:${NC}"
+echo ""
+echo -e "    ${CYAN}fraym start${NC}      Inicia el servicio"
+echo -e "    ${CYAN}fraym stop${NC}       Detiene el servicio"
+echo -e "    ${CYAN}fraym restart${NC}    Reinicia el servicio"
+echo -e "    ${CYAN}fraym update${NC}     Actualiza a la última versión"
+echo -e "    ${CYAN}fraym logs${NC}       Muestra logs en tiempo real"
+echo -e "    ${CYAN}fraym status${NC}     Estado del servicio"
+echo -e "    ${CYAN}fraym clean${NC}      Limpia archivos temporales"
+echo -e "    ${CYAN}fraym env${NC}        Variables de entorno"
+echo -e "    ${CYAN}fraym help${NC}       Ayuda"
 echo ""

@@ -1,6 +1,7 @@
 import type { Segment, TranscriptChunk, DetectOptions } from "./types";
 import { formatTime } from "./types";
 import { detectWithHeuristics, generateEvenSegments } from "./scoring";
+import { logAI } from "./logger";
 
 function buildTimedTranscript(chunks: TranscriptChunk[]): string {
   if (chunks.length === 0) return "";
@@ -34,7 +35,7 @@ async function detectWithAI(
 ): Promise<Segment[] | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    console.log("[fraym] No OPENROUTER_API_KEY, skipping AI detection");
+    logAI.warn("Sin OPENROUTER_API_KEY — omitiendo deteccion IA");
     return null;
   }
 
@@ -67,7 +68,7 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
 [{"start": SEGUNDOS, "end": SEGUNDOS, "title": "título viral", "reason": "por qué es viral"}]`;
 
   try {
-    console.log("[fraym] Calling AI for moment detection...");
+    logAI.step("Iniciando deteccion con IA...");
 
     const MODELS = [
       "google/gemma-3-27b-it:free",
@@ -78,7 +79,7 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
 
     let data: any = null;
     for (const model of MODELS) {
-      console.log(`[fraym] Trying model: ${model}`);
+      logAI.info(`Probando modelo`, model);
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -98,24 +99,24 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
       if (res.ok) {
         data = await res.json();
         if (data.choices?.[0]?.message?.content) {
-          console.log(`[fraym] Got response from ${model}`);
+          logAI.success(`Respuesta recibida`, model);
           break;
         }
       } else {
-        console.log(`[fraym] ${model} failed (${res.status}), trying next...`);
+        logAI.warn(`Modelo fallido (${res.status})`, model);
       }
       data = null;
     }
 
     if (!data) {
-      console.log("[fraym] All AI models failed");
+      logAI.error("Todos los modelos fallaron");
       return null;
     }
 
     const content = data.choices?.[0]?.message?.content?.trim();
     if (!content) return null;
 
-    console.log("[fraym] AI response:", content.slice(0, 200));
+    logAI.debug("Respuesta IA", content.slice(0, 120) + "...");
 
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) return null;
@@ -155,12 +156,12 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
     if (segments.length === 0) return null;
 
     for (const seg of segments) {
-      console.log(`[fraym] AI picked: ${formatTime(seg.start)}-${formatTime(seg.end)} "${seg.title}"`);
+      logAI.info(`Momento: ${formatTime(seg.start)}-${formatTime(seg.end)}`, `"${seg.title}"`);
     }
 
     return segments.sort((a, b) => a.start - b.start);
   } catch (err: any) {
-    console.log(`[fraym] AI detection failed: ${err.message}`);
+    logAI.error("Deteccion IA fallida", err.message);
     return null;
   }
 }
@@ -176,16 +177,16 @@ export async function detectBestMoments(
   const MAX = freeLength ? 300 : options.maxDuration!;
 
   if (chunks.length === 0) {
-    console.log("[fraym] No transcript, using evenly spaced segments");
+    logAI.warn("Sin transcripcion — usando segmentos equidistantes");
     return generateEvenSegments(videoDuration, TARGET, (MIN + MAX) / 2);
   }
 
   const aiSegments = await detectWithAI(chunks, videoDuration, options);
   if (aiSegments && aiSegments.length >= 2) {
-    console.log(`[fraym] Using AI-detected segments (${aiSegments.length})`);
+    logAI.success(`Usando segmentos IA`, `${aiSegments.length} detectados`);
     return aiSegments;
   }
 
-  console.log("[fraym] Falling back to heuristic scoring");
+  logAI.info("Fallback a scoring heuristico");
   return detectWithHeuristics(chunks, videoDuration, options);
 }

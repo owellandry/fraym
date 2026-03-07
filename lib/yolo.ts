@@ -1,6 +1,7 @@
 import path from "path";
 import sharp from "sharp";
 import * as ort from "onnxruntime-node";
+import { logYolo } from "./logger";
 
 const MODELS_DIR = path.join(process.cwd(), "models");
 const MODEL_INPUT_SIZE = 640;
@@ -20,22 +21,22 @@ export type { BoundingBox };
 async function loadFaceModel(): Promise<ort.InferenceSession> {
   if (faceSession) return faceSession;
   const modelPath = path.join(MODELS_DIR, "yolov8n-face.onnx");
-  console.log("[fraym] Loading YOLOv8n-face model...");
+  logYolo.step("Cargando modelo YOLOv8n-face...");
   faceSession = await ort.InferenceSession.create(modelPath, {
     executionProviders: ["cpu"],
   });
-  console.log("[fraym] Face model loaded.");
+  logYolo.success("Modelo face cargado");
   return faceSession;
 }
 
 async function loadPersonModel(): Promise<ort.InferenceSession> {
   if (personSession) return personSession;
   const modelPath = path.join(MODELS_DIR, "yolov8n-person.onnx");
-  console.log("[fraym] Loading YOLOv8n-person model...");
+  logYolo.step("Cargando modelo YOLOv8n-person...");
   personSession = await ort.InferenceSession.create(modelPath, {
     executionProviders: ["cpu"],
   });
-  console.log("[fraym] Person model loaded.");
+  logYolo.success("Modelo person cargado");
   return personSession;
 }
 
@@ -154,7 +155,7 @@ export async function detectInFrame(framePath: string): Promise<BoundingBox[]> {
     const faces = parseYoloOutput(results[outputName]!, origWidth, origHeight, "face", 0.4);
     if (faces.length > 0) return faces;
   } catch (err) {
-    console.error("[fraym] Face detection error:", err);
+    logYolo.warn("Face detection error", String(err));
   }
 
   try {
@@ -164,7 +165,7 @@ export async function detectInFrame(framePath: string): Promise<BoundingBox[]> {
     const outputName = personModel.outputNames[0]!;
     return parseYoloOutput(results[outputName]!, origWidth, origHeight, "person", 0.35);
   } catch (err) {
-    console.error("[fraym] Person detection error:", err);
+    logYolo.warn("Person detection error", String(err));
     return [];
   }
 }

@@ -1,7 +1,11 @@
 import crypto from "crypto";
 import { createJob, getJob } from "@/lib/queue";
+import { logAPI, printBanner } from "@/lib/logger";
 // Import worker to register it
 import "@/lib/worker";
+
+// Print startup banner on first load
+printBanner();
 
 // POST /api/jobs — Create a new job (returns immediately)
 export async function POST(request: Request) {
@@ -22,7 +26,7 @@ export async function POST(request: Request) {
       maxDuration: maxDuration || 60,
     });
 
-    console.log(`[API] Job ${id} created for: ${url}`);
+    logAPI.info(`Job ${id} creado`, url);
 
     return Response.json({
       id: job.id,

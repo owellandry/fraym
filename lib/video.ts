@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs/promises";
 import { TMP_DIR, OUTPUT_DIR, FFMPEG, FFPROBE, ensureDirs } from "./config";
 import { extractVideoId, getVideoInfo, downloadVideo as ytDownload, downloadCaptionFile } from "./youtube";
+import { logVideo, logSubs } from "./logger";
 import type { Segment } from "./types";
 
 export { ensureDirs };
@@ -14,13 +15,13 @@ export async function downloadVideo(url: string, jobId: string): Promise<string>
   const videoId = extractVideoId(url);
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
 
-  console.log(`[fraym] Fetching info for ${videoId} via proxy...`);
+  logVideo.info(`Fetching info for ${videoId}`);
   const info = await getVideoInfo(videoId);
-  console.log(`[fraym] Downloading: ${info.title} [${info.bestQuality}]`);
+  logVideo.info(`Descargando: ${info.title}`, info.bestQuality);
 
   await ytDownload(videoId, outputPath, "720");
 
-  console.log(`[fraym] Download complete: ${outputPath}`);
+  logVideo.success("Descarga completa", outputPath);
   return outputPath;
 }
 
@@ -43,13 +44,13 @@ export async function downloadSubtitles(url: string, jobId: string): Promise<str
 
     try {
       await fs.access(subPath);
-      console.log(`[fraym] Subtitles downloaded (${track.languageCode}): ${subPath}`);
+      logSubs.success(`Subtitulos descargados`, `lang=${track.languageCode}`);
       return subPath;
     } catch {
       return "";
     }
   } catch (err: any) {
-    console.log(`[fraym] Subtitle download failed: ${err.message}`);
+    logSubs.warn(`Descarga de subtitulos fallida`, err.message);
     return "";
   }
 }
@@ -145,10 +146,10 @@ export async function cutSegment(
   if (assSubtitlePath) {
     const escapedPath = assSubtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
     vf += `,ass='${escapedPath}'`;
-    console.log(`[fraym] Burning subtitles: ${assSubtitlePath}`);
+    logVideo.debug("Quemando subtitulos ASS");
   }
 
-  console.log(`[fraym] Cutting segment #${index + 1} with filter: ${vf}`);
+  logVideo.step(`Cortando clip #${index + 1}`, `${Math.round(duration)}s`);
 
   return new Promise((resolve, reject) => {
     const proc = spawn(FFMPEG, [
@@ -178,9 +179,12 @@ export async function cutSegment(
 
 export async function cleanupJob(jobId: string) {
   const files = await fs.readdir(TMP_DIR);
+  let cleaned = 0;
   for (const file of files) {
     if (file.startsWith(jobId)) {
       await fs.unlink(path.join(TMP_DIR, file)).catch(() => {});
+      cleaned++;
     }
   }
+  if (cleaned > 0) logVideo.debug(`Limpieza: ${cleaned} archivos temporales eliminados`);
 }

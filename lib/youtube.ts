@@ -1,6 +1,7 @@
 // YouTube client — routes through Cloudflare Worker proxy (dlsrv HD downloads)
 import fs from "fs/promises";
 import * as fsSync from "fs";
+import { logYoutube } from "./logger";
 
 const PROXY_URL = process.env.YT_PROXY_URL || "";
 const PROXY_SECRET = process.env.YT_PROXY_SECRET || "";
@@ -37,7 +38,7 @@ export async function getVideoInfo(videoId: string): Promise<VideoInfo> {
   const data: any = await res.json();
   if (data.status !== "OK") throw new Error("Video not available");
 
-  console.log(`[fraym] Video: ${data.title} [${data.bestQuality}] (${data.duration}s)`);
+  logYoutube.info(`${data.title}`, `${data.bestQuality} · ${data.duration}s`);
 
   return {
     title: data.title,
@@ -67,7 +68,7 @@ export async function downloadVideo(videoId: string, filePath: string, quality =
     throw new Error("Failed to get download URL");
   }
 
-  console.log(`[fraym] Downloading ${quality}p: ${dlData.filename || videoId}`);
+  logYoutube.step(`Descargando ${quality}p`, dlData.filename || videoId);
 
   // Step 2: Download the video through our proxy (to avoid IP issues)
   const streamUrl = `${PROXY_URL}/stream?url=${encodeURIComponent(dlData.url)}`;

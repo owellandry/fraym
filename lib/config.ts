@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs/promises";
 import * as fsSync from "fs";
 import os from "os";
+import { log } from "./logger";
 
 export const TMP_DIR = path.join(process.cwd(), "tmp");
 export const OUTPUT_DIR = path.join(process.cwd(), "public", "outputs");
@@ -34,7 +35,7 @@ function findBinary(name: string): string {
   for (const c of candidates) {
     try {
       fsSync.accessSync(c);
-      console.log(`[fraym] Found ${name} at: ${c}`);
+      log.debug(`Found ${name} at: ${c}`);
       return c;
     } catch {}
   }

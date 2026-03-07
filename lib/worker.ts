@@ -4,6 +4,7 @@ import { detectBestMoments } from "./detect";
 import { detectCropRegion, buildCropFilter } from "./crop";
 import { generateSubtitleFile } from "./subtitles";
 import { updateJob, setWorker } from "./queue";
+import { createJobLogger } from "./logger";
 import type { Job } from "./queue";
 
 function smoothProgress(
@@ -37,17 +38,23 @@ function smoothProgress(
 
 async function processJob(job: Job): Promise<void> {
   const { id, url } = job;
+  const jlog = createJobLogger(id);
+
+  jlog.info("Iniciando pipeline", url);
 
   // Step 1: Download (5% -> 25%)
+  jlog.step("Descargando video...");
   updateJob(id, { status: "downloading", progress: 5, message: "Descargando video..." });
 
   const dlProgress = smoothProgress(id, 5, 24, 15000, "Descargando video...");
   const videoPath = await downloadVideo(url, id);
   dlProgress.stop();
 
+  jlog.success("Video descargado");
   updateJob(id, { progress: 25, message: "Video descargado", videoPath });
 
   // Step 2: Analyze (26% -> 50%)
+  jlog.step("Analizando contenido...");
   updateJob(id, { status: "analyzing", progress: 26, message: "Descargando subtitulos..." });
 
   const subProgress = smoothProgress(id, 26, 34, 8000, "Descargando subtitulos...");
@@ -62,7 +69,9 @@ async function processJob(job: Job): Promise<void> {
   let chunks: { text: string; start: number; end: number }[] = [];
   if (subtitlePath) {
     chunks = await parseSubtitles(subtitlePath);
-    console.log(`[fraym] Parsed ${chunks.length} subtitle chunks`);
+    jlog.info(`Subtitulos parseados`, `${chunks.length} chunks`);
+  } else {
+    jlog.warn("Sin subtitulos disponibles");
   }
 
   const aiProgress = smoothProgress(id, 36, 49, 12000, "IA analizando momentos...");
@@ -77,9 +86,11 @@ async function processJob(job: Job): Promise<void> {
     throw new Error("No se encontraron momentos adecuados");
   }
 
+  jlog.success(`${segments.length} momentos detectados`);
   updateJob(id, { progress: 50, segments, message: `${segments.length} momentos detectados` });
 
   // Step 3: Process (51% -> 95%)
+  jlog.step("Procesando clips...");
   updateJob(id, { status: "processing", progress: 51, message: "Ajustando cortes a escenas..." });
 
   const sceneProgress = smoothProgress(id, 51, 56, 6000, "Ajustando cortes a escenas...");
@@ -95,6 +106,7 @@ async function processJob(job: Job): Promise<void> {
   }
   sceneProgress.stop();
 
+  jlog.info("Cortes ajustados a scene cuts");
   updateJob(id, { progress: 57, message: "Detectando encuadre (YOLO)..." });
 
   const ffmpegPath = getFfmpegPath();
@@ -107,6 +119,7 @@ async function processJob(job: Job): Promise<void> {
   );
   yoloProgress.stop();
 
+  jlog.info("Encuadre detectado por YOLO");
   updateJob(id, { progress: 65, message: "Generando subtitulos..." });
 
   const vttPath = subtitlePath && subtitlePath.endsWith(".vtt") ? subtitlePath : undefined;
@@ -126,6 +139,7 @@ async function processJob(job: Job): Promise<void> {
       const filter = buildCropFilter(cropRegions[i]!);
       const output = await cutSegment(videoPath, seg, i, id, filter, subtitleFiles[i]);
       clipsReady++;
+      jlog.info(`Clip ${clipsReady}/${totalClips} renderizado`);
       updateJob(id, {
         progress: Math.round(70 + (clipsReady / totalClips) * 25),
         message: clipsReady < totalClips
@@ -144,8 +158,9 @@ async function processJob(job: Job): Promise<void> {
     message: `${outputs.length} shorts generados`,
   });
 
+  jlog.done(`Pipeline completado — ${outputs.length} shorts`);
+
   await cleanupJob(id).catch(() => {});
-  console.log(`[fraym] Job ${id} completed: ${outputs.length} shorts`);
 }
 
 setWorker(processJob);

@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import sharp from "sharp";
 import { TMP_DIR } from "./config";
 import { detectInFrame, type BoundingBox } from "./yolo";
+import { logYolo } from "./logger";
 import type { CropRegion } from "./types";
 
 interface FrameDetections {
@@ -58,7 +59,7 @@ function decideCropStrategy(
   const allBoxes = allDetections.flatMap(d => d.boxes);
 
   if (allBoxes.length === 0) {
-    console.log("[fraym] No faces/persons detected, using center crop");
+    logYolo.info("Sin detecciones, usando crop centrado");
     return { x: -1, strategy: "center" };
   }
 
@@ -70,7 +71,7 @@ function decideCropStrategy(
   const subjectSpread = Math.max(...allBoxes.map(b => b.x2)) - Math.min(...allBoxes.map(b => b.x1));
 
   if (subjectSpread > cropWidthRatio * 1.5) {
-    console.log("[fraym] Wide subject spread, tracking primary subject");
+    logYolo.debug("Sujeto amplio, rastreando principal");
   }
 
   let cropX = medianCenter - cropWidthRatio / 2;
@@ -79,7 +80,7 @@ function decideCropStrategy(
   const hasFaces = allBoxes.some(b => b.label === "face");
   const strategy = hasFaces ? "face" : "person";
 
-  console.log(`[fraym] Strategy: ${strategy}, crop center at ${(medianCenter * 100).toFixed(0)}% from left, ${allBoxes.length} detections across ${allDetections.length} frames`);
+  logYolo.info(`Estrategia: ${strategy}`, `centro=${(medianCenter * 100).toFixed(0)}% · ${allBoxes.length} detecciones en ${allDetections.length} frames`);
 
   const filterRatio = (1 - cropWidthRatio) > 0 ? cropX / (1 - cropWidthRatio) : 0;
 
@@ -94,12 +95,12 @@ export async function detectCropRegion(
   segIndex: number,
   ffmpegPath: string
 ): Promise<CropRegion> {
-  console.log(`[fraym] YOLO analyzing segment #${segIndex + 1}...`);
+  logYolo.step(`Analizando segmento #${segIndex + 1}`);
 
   const frames = await extractFrames(videoPath, start, duration, `${jobId}_s${segIndex}`, ffmpegPath, 6);
 
   if (frames.length === 0) {
-    console.log("[fraym] No frames extracted, center crop");
+    logYolo.warn("Sin frames extraidos, crop centrado");
     return { x: -1, strategy: "center" };
   }
 
@@ -114,10 +115,10 @@ export async function detectCropRegion(
       const boxes = await detectInFrame(frames[i]!);
       allDetections.push({ boxes, frameIndex: i });
       if (boxes.length > 0) {
-        console.log(`[fraym] Frame ${i + 1}: ${boxes.length} ${boxes[0]!.label}(s) detected`);
+        logYolo.debug(`Frame ${i + 1}: ${boxes.length} ${boxes[0]!.label}(s)`);
       }
     } catch (err) {
-      console.error(`[fraym] Frame ${i + 1} detection failed:`, err);
+      logYolo.warn(`Frame ${i + 1} deteccion fallida`, String(err));
     }
   }
 
