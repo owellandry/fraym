@@ -67,7 +67,7 @@ const FFMPEG_DIR = path.dirname(FFMPEG);
 
 export function getYtdlpPath() { return YTDLP; }
 
-function getYtdlpAuthArgs(): string[] {
+export function getYtdlpAuthArgs(): string[] {
   const args: string[] = [];
   const cookiesFile = process.env.YTDLP_COOKIES_FILE?.trim();
   const cookiesFromBrowser = process.env.YTDLP_COOKIES_FROM_BROWSER?.trim();

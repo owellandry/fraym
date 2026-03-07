@@ -1,5 +1,5 @@
 // Background worker — processes a single job through the full pipeline
-import { downloadVideo, getVideoDuration, getYtdlpPath, getFfmpegPath, cutSegment, cleanupJob, findNearestSceneCut } from "./video";
+import { downloadVideo, getVideoDuration, getYtdlpPath, getFfmpegPath, cutSegment, cleanupJob, findNearestSceneCut, getYtdlpAuthArgs } from "./video";
 import { parseSubtitles, detectBestMoments } from "./ai";
 import { detectCropRegion, buildCropFilter } from "./smartcrop";
 import { generateSubtitleFile } from "./subtitles";
@@ -47,6 +47,7 @@ async function downloadSubtitles(url: string, jobId: string): Promise<string> {
 
   return new Promise((resolve) => {
     const proc = spawn(ytdlp, [
+      ...getYtdlpAuthArgs(),
       "--write-auto-sub",
       "--write-sub",
       "--sub-lang", "es,en,es-419",
