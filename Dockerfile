@@ -16,7 +16,9 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
 # yt-dlp global config — js runtime + remote challenge solver
-RUN mkdir -p /root/.config/yt-dlp && printf '--js-runtimes node\n--remote-components ejs:github\n' > /root/.config/yt-dlp/config
+RUN mkdir -p /root/.config/yt-dlp && \
+    echo '--js-runtimes node' > /root/.config/yt-dlp/config && \
+    echo '--remote-components ejs:github' >> /root/.config/yt-dlp/config
 
 WORKDIR /app
 
