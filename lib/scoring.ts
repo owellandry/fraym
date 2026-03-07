@@ -126,7 +126,12 @@ export function buildTitle(text: string): string {
   return words.length > 50 ? words.slice(0, 47) + "..." : words;
 }
 
-export function generateEvenSegments(duration: number, count: number = 4, segDur: number = 35): Segment[] {
+export function generateEvenSegments(
+  duration: number,
+  count: number = 4,
+  segDur: number = 35,
+  chunks: TranscriptChunk[] = []
+): Segment[] {
   count = Math.min(count, Math.floor(duration / segDur));
   const spacing = duration / (count + 1);
   const segments: Segment[] = [];
@@ -135,31 +140,18 @@ export function generateEvenSegments(duration: number, count: number = 4, segDur
     const center = spacing * (i + 1);
     const start = Math.max(0, center - segDur / 2);
     const end = Math.min(duration, start + segDur);
-    const posLabel = positionTitle(i, count, start, duration);
-    segments.push({
-      start, end,
-      title: posLabel,
-      reason: "Segmento auto-detectado",
-      score: 0,
-    });
+
+    const windowChunks = chunks.filter(c => c.start >= start && c.end <= end);
+    const windowText = windowChunks.map(c => c.text).join(" ");
+    const title = windowText ? buildTitle(windowText) : `Short #${i + 1}`;
+    const reason = windowText
+      ? "Segmento con transcripcion disponible"
+      : "Segmento auto-detectado";
+
+    segments.push({ start, end, title, reason, score: 0 });
   }
 
   return segments;
-}
-
-function positionTitle(index: number, total: number, start: number, duration: number): string {
-  const pct = start / duration;
-
-  if (total <= 2) {
-    return index === 0 ? "Mejor momento" : "Segundo momento";
-  }
-
-  if (pct < 0.15) return "Inicio destacado";
-  if (pct < 0.35) return "Primer acto";
-  if (pct < 0.55) return "Momento central";
-  if (pct < 0.75) return "Punto clave";
-  if (pct < 0.9) return "Climax";
-  return "Final destacado";
 }
 
 export function detectWithHeuristics(
@@ -238,7 +230,7 @@ export function detectWithHeuristics(
   }
 
   if (selected.length < 2) {
-    return generateEvenSegments(videoDuration, TARGET_SHORTS, (SHORT_MIN + SHORT_MAX) / 2);
+    return generateEvenSegments(videoDuration, TARGET_SHORTS, (SHORT_MIN + SHORT_MAX) / 2, chunks);
   }
 
   return selected.sort((a, b) => a.start - b.start);

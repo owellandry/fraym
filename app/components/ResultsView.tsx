@@ -306,13 +306,6 @@ export default function ResultsView({ job, url, onReset }: Props) {
               <PreviewPlayer src={previewOutput} />
               <div className="preview-gradient" />
 
-              {/* Subtitles */}
-              <div className="preview-subs">
-                <span className="preview-subs-text">
-                  {previewSeg?.title || `Short #${(preview ?? 0) + 1}`}
-                </span>
-              </div>
-
               {/* TikTok action buttons */}
               <div className="preview-actions">
                 <div className="preview-action-col">

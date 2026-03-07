@@ -178,7 +178,7 @@ export async function detectBestMoments(
 
   if (chunks.length === 0) {
     logAI.warn("Sin transcripcion — usando segmentos equidistantes");
-    return generateEvenSegments(videoDuration, TARGET, (MIN + MAX) / 2);
+    return generateEvenSegments(videoDuration, TARGET, (MIN + MAX) / 2, []);
   }
 
   const aiSegments = await detectWithAI(chunks, videoDuration, options);
