@@ -109,6 +109,8 @@ async function processQueue() {
     // Run in background — don't await
     workerFn(job)
       .catch((err) => {
+        console.error(`[job:${jobId}] ✗ ERROR:`, err.message || err);
+        if (err.stack) console.error(err.stack);
         updateJob(jobId, {
           status: "error",
           error: err.message || "Unknown error",

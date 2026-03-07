@@ -70,8 +70,11 @@ async function processJob(job: Job): Promise<void> {
   if (subtitlePath) {
     chunks = await parseSubtitles(subtitlePath);
     jlog.info(`Subtitulos parseados`, `${chunks.length} chunks`);
+    if (chunks.length > 0) {
+      jlog.debug(`Transcripcion preview: "${chunks.slice(0, 3).map(c => c.text).join(" | ")}"`);
+    }
   } else {
-    jlog.warn("Sin subtitulos disponibles");
+    jlog.warn("Sin subtitulos disponibles — titulos seran genericos");
   }
 
   const aiProgress = smoothProgress(id, 36, 49, 12000, "IA analizando momentos...");
@@ -87,6 +90,9 @@ async function processJob(job: Job): Promise<void> {
   }
 
   jlog.success(`${segments.length} momentos detectados`);
+  for (const seg of segments) {
+    jlog.info(`  → [${seg.title || "SIN TITULO"}] ${Math.round(seg.start)}s-${Math.round(seg.end)}s | reason: ${seg.reason || "none"}`);
+  }
   updateJob(id, { progress: 50, segments, message: `${segments.length} momentos detectados` });
 
   // Step 3: Process (51% -> 95%)

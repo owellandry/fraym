@@ -31,24 +31,37 @@ export async function downloadSubtitles(url: string, jobId: string): Promise<str
     const info = await getVideoInfo(videoId);
     const tracks = info.captions || [];
 
+    logSubs.info(`Tracks via proxy: ${tracks.length}`);
+
+    for (const t of tracks) {
+      logSubs.debug(`  track: lang=${t.languageCode || "?"} kind=${t.kind || "standard"} baseUrl=${t.baseUrl ? "SI" : "NO"}`);
+    }
+
     const track =
       tracks.find((t: any) => t.languageCode === "es" || t.languageCode === "es-419") ??
       tracks.find((t: any) => t.languageCode?.startsWith("es")) ??
       tracks.find((t: any) => t.languageCode?.startsWith("en")) ??
       tracks[0];
 
-    if (!track?.baseUrl) return "";
+    if (!track?.baseUrl) {
+      logSubs.warn("No se encontraron tracks de subtitulos");
+      return "";
+    }
 
+    logSubs.info(`Descargando track: lang=${track.languageCode} kind=${track.kind || "standard"}`);
     const subPath = path.join(TMP_DIR, `${jobId}_subs.vtt`);
     await downloadCaptionFile(track.baseUrl, subPath);
 
     try {
-      await fs.access(subPath);
-      logSubs.success(`Subtitulos descargados`, `lang=${track.languageCode}`);
-      return subPath;
-    } catch {
-      return "";
-    }
+      const stat = await fs.stat(subPath);
+      if (stat.size > 0) {
+        logSubs.success(`Subtitulos descargados`, `lang=${track.languageCode} size=${stat.size}b`);
+        return subPath;
+      }
+    } catch {}
+
+    logSubs.warn("No se pudieron obtener subtitulos");
+    return "";
   } catch (err: any) {
     logSubs.warn(`Descarga de subtitulos fallida`, err.message);
     return "";

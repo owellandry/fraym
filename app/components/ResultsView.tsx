@@ -31,13 +31,14 @@ function shortUrl(url: string): string {
 function getSegmentTitle(seg: JobState["segments"][number] | undefined, index: number): string {
   const cleanTitle = (seg?.title || "")
     .replace(/\[[^\]]+\]/g, " ")
+    .replace(/\(\d+:\d+[-–]\d+:\d+\)/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (cleanTitle && !/^short\s*#?\s*\d+$/i.test(cleanTitle)) return cleanTitle;
+  if (cleanTitle && !/^(short|clip|segment|momento)\s*#?\s*\d+$/i.test(cleanTitle)) return cleanTitle;
 
   const cleanReason = (seg?.reason || "").replace(/\s+/g, " ").trim();
-  if (cleanReason) return cleanReason.slice(0, 60);
+  if (cleanReason && !/^(segmento|clip|short)/i.test(cleanReason)) return cleanReason.slice(0, 60);
 
   return `Clip ${index + 1}`;
 }

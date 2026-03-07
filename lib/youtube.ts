@@ -106,15 +106,31 @@ export async function downloadVideo(videoId: string, filePath: string, quality =
 }
 
 export async function downloadCaptionFile(baseUrl: string, filePath: string): Promise<void> {
-  if (!isProxyConfigured()) throw new Error("YouTube proxy not configured");
+  // Handle data URIs (from maestra fallback in Worker)
+  if (baseUrl.startsWith("data:")) {
+    const base64 = baseUrl.split(",")[1] || "";
+    const vtt = Buffer.from(base64, "base64").toString("utf-8");
+    if (vtt && vtt.length > 10) {
+      await fs.writeFile(filePath, vtt, "utf-8");
+      logYoutube.debug(`Caption from data URI: ${vtt.length} chars`);
+    }
+    return;
+  }
 
-  const proxyUrl = `${PROXY_URL}/caption-file?url=${encodeURIComponent(baseUrl + "&fmt=vtt")}`;
+  if (!isProxyConfigured()) return;
+
+  // Download through proxy
+  const proxyUrl = `${PROXY_URL}/caption-file?url=${encodeURIComponent(baseUrl)}`;
   const res = await fetch(proxyUrl, { headers: proxyHeaders() });
   if (!res.ok) return;
 
   const text = await res.text();
-  await fs.writeFile(filePath, text, "utf-8");
+  if (text && text.length > 10) {
+    await fs.writeFile(filePath, text, "utf-8");
+    logYoutube.debug(`Caption file downloaded: ${text.length} chars`);
+  }
 }
+
 
 export function extractVideoId(url: string): string {
   const patterns = [

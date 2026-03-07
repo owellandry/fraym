@@ -62,6 +62,12 @@ export function useJob() {
   async function submit() {
     if (!url.trim() || isProcessing) return;
 
+    // Normalize: add https:// if missing
+    let finalUrl = url.trim();
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
     setJob({ status: "downloading", progress: 5, segments: [], outputs: [] });
 
     try {
@@ -69,7 +75,7 @@ export function useJob() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url,
+          url: finalUrl,
           clipCount,
           minDuration: DURATION_OPTIONS[durationIdx]!.min,
           maxDuration: DURATION_OPTIONS[durationIdx]!.max,

@@ -46,6 +46,12 @@ export default {
       if (url.pathname === "/caption-file") {
         const cu = url.searchParams.get("url");
         if (!cu) return Response.json({ error: "Missing caption URL" }, { status: 400, headers: cors });
+        // Handle data URIs (from maestra fallback)
+        if (cu.startsWith("data:")) {
+          const base64 = cu.split(",")[1] || "";
+          const vtt = decodeURIComponent(escape(atob(base64)));
+          return new Response(vtt, { headers: { ...cors, "Content-Type": "text/vtt" } });
+        }
         const r = await fetch(cu, { headers: { "User-Agent": UA } });
         return new Response(await r.text(), { headers: { ...cors, "Content-Type": "text/vtt" } });
       }
@@ -145,45 +151,101 @@ async function getDownloadUrl(videoId: string, quality: string) {
 // ===== CAPTIONS =====
 
 async function getCaptions(videoId: string): Promise<any[]> {
-  const res = await fetch(
-    `https://www.youtube.com/watch?v=${videoId}&has_verified=1`,
-    {
-      headers: {
-        "User-Agent": UA,
-        "Accept-Language": "en-US,en;q=0.5",
-        "Cookie": "CONSENT=PENDING+987",
-      },
-    }
-  );
-  if (!res.ok) return [];
+  // Try YouTube scraping first
+  const tracks = await getCaptionsFromYoutube(videoId);
+  if (tracks.length > 0) return tracks;
 
-  const html = await res.text();
-  const marker = "var ytInitialPlayerResponse = ";
-  const idx = html.indexOf(marker);
-  if (idx === -1) return [];
+  // Fallback: maestra.ai API — returns VTT directly
+  const maestraVtt = await getCaptionsFromMaestra(videoId);
+  if (maestraVtt) {
+    // Return as a synthetic track with the VTT content embedded as baseUrl data URI
+    return [{
+      languageCode: maestraVtt.lang,
+      name: { simpleText: `${maestraVtt.lang} (maestra)` },
+      kind: "asr",
+      baseUrl: `data:text/vtt;base64,${btoa(unescape(encodeURIComponent(maestraVtt.vtt)))}`,
+    }];
+  }
 
-  const start = idx + marker.length;
-  if (html[start] !== "{") return [];
+  return [];
+}
 
-  let depth = 0, inStr = false, esc = false;
-  for (let i = start; i < html.length; i++) {
-    const c = html[i];
-    if (esc) { esc = false; continue; }
-    if (c === "\\") { esc = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (c === "{") depth++;
-    else if (c === "}") {
-      depth--;
-      if (depth === 0) {
-        try {
-          const data = JSON.parse(html.slice(start, i + 1));
-          return data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-        } catch { return []; }
+async function getCaptionsFromYoutube(videoId: string): Promise<any[]> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/watch?v=${videoId}&has_verified=1`,
+      {
+        headers: {
+          "User-Agent": UA,
+          "Accept-Language": "es,en;q=0.5",
+          "Cookie": "CONSENT=PENDING+987",
+        },
+      }
+    );
+    if (!res.ok) return [];
+
+    const html = await res.text();
+
+    // Try both markers YouTube uses
+    const markers = ["var ytInitialPlayerResponse = ", "ytInitialPlayerResponse = "];
+    for (const marker of markers) {
+      const idx = html.indexOf(marker);
+      if (idx === -1) continue;
+
+      const start = idx + marker.length;
+      if (html[start] !== "{") continue;
+
+      let depth = 0, inStr = false, esc = false;
+      for (let i = start; i < html.length; i++) {
+        const c = html[i];
+        if (esc) { esc = false; continue; }
+        if (c === "\\") { esc = true; continue; }
+        if (c === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (c === "{") depth++;
+        else if (c === "}") {
+          depth--;
+          if (depth === 0) {
+            try {
+              const data = JSON.parse(html.slice(start, i + 1));
+              const tracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+              if (tracks.length > 0) return tracks;
+            } catch {}
+            break;
+          }
+        }
       }
     }
+    return [];
+  } catch {
+    return [];
   }
-  return [];
+}
+
+async function getCaptionsFromMaestra(videoId: string): Promise<{ vtt: string; lang: string } | null> {
+  try {
+    const res = await fetch("https://website-tools-dot-maestro-218920.uk.r.appspot.com/getYoutubeCaptions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Origin": "https://maestra.ai",
+        "Referer": "https://maestra.ai/",
+        "User-Agent": UA,
+      },
+      body: JSON.stringify({ videoUrl: `https://www.youtube.com/watch?v=${videoId}` }),
+    });
+
+    if (!res.ok) return null;
+
+    const data: any = await res.json();
+    const vtt = data.selectedCaptions || "";
+    if (vtt && vtt.includes("-->")) {
+      return { vtt, lang: data.defaultLanguage || "es" };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // ===== STREAM PROXY =====

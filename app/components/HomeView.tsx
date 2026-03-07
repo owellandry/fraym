@@ -24,10 +24,12 @@ export default function HomeView({
   useEffect(() => {
     function handlePaste(e: ClipboardEvent) {
       if (document.activeElement === inputRef.current) return;
-      const text = e.clipboardData?.getData("text")?.trim();
+      let text = e.clipboardData?.getData("text")?.trim();
       if (!text) return;
+      // Add protocol if missing so URL constructor can parse it
+      const normalized = /^https?:\/\//i.test(text) ? text : `https://${text}`;
       try {
-        const parsed = new URL(text);
+        const parsed = new URL(normalized);
         if (parsed.hostname.includes("youtube") || parsed.hostname.includes("youtu.be")) {
           e.preventDefault();
           setUrl(text);
@@ -87,7 +89,7 @@ export default function HomeView({
           <div className="input-row">
             <input
               ref={inputRef}
-              type="url"
+              type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://youtube.com/watch?v=..."

@@ -49,13 +49,6 @@ function sanitizeTitle(raw: string): string {
     .trim();
 }
 
-function fallbackSegmentTitle(start: number, end: number, index: number): string {
-  const startM = Math.floor(start / 60);
-  const startS = Math.floor(start % 60).toString().padStart(2, "0");
-  const endM = Math.floor(end / 60);
-  const endS = Math.floor(end % 60).toString().padStart(2, "0");
-  return `Clip ${index + 1} (${startM}:${startS}-${endM}:${endS})`;
-}
 
 export function scoreTranscriptWindow(
   chunks: TranscriptChunk[],
@@ -121,9 +114,20 @@ export function scoreTranscriptWindow(
 
 export function buildTitle(text: string): string {
   const cleaned = sanitizeTitle(text);
-  const sentences = cleaned.split(/[.!?]+/).filter(s => s.trim().length > 5);
 
-  // Prefer sentences with hooks or intensity words
+  // Split by punctuation first, fallback to ~8 word chunks for ASR text without punctuation
+  let sentences = cleaned.split(/[.!?]+/).filter(s => s.trim().length > 5);
+  if (sentences.length <= 1 && cleaned.length > 60) {
+    // ASR text without punctuation — split into word groups
+    const words = cleaned.split(/\s+/);
+    sentences = [];
+    for (let i = 0; i < words.length; i += 8) {
+      const chunk = words.slice(i, i + 8).join(" ");
+      if (chunk.length > 5) sentences.push(chunk);
+    }
+  }
+
+  // Prefer sentences/chunks with hooks or intensity words
   const interesting = sentences.find(s => {
     const lower = s.toLowerCase();
     return HOOK_OPENERS.some(h => lower.includes(h))
@@ -135,11 +139,16 @@ export function buildTitle(text: string): string {
   const best = interesting || sentences[0];
   if (best) {
     const trimmed = best.trim();
-    if (trimmed.length <= 50) return trimmed;
-    return trimmed.slice(0, 47) + "...";
+    // Capitalize first letter
+    const titled = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    if (titled.length <= 50) return titled;
+    // Cut at last word boundary before 50 chars
+    const cut = titled.slice(0, 50).replace(/\s\S*$/, "");
+    return (cut || titled.slice(0, 47)) + "...";
   }
   const words = cleaned.split(/\s+/).slice(0, 8).join(" ");
-  return words.length > 50 ? words.slice(0, 47) + "..." : words;
+  const titled = words.charAt(0).toUpperCase() + words.slice(1);
+  return titled.length > 50 ? titled.slice(0, 47) + "..." : titled;
 }
 
 export function generateEvenSegments(
@@ -159,7 +168,7 @@ export function generateEvenSegments(
 
     const windowChunks = chunks.filter(c => c.start >= start && c.end <= end);
     const windowText = windowChunks.map(c => c.text).join(" ");
-    const title = windowText ? buildTitle(windowText) : fallbackSegmentTitle(start, end, i);
+    const title = windowText ? buildTitle(windowText) : "";
     const reason = windowText
       ? "Segmento con transcripcion disponible"
       : "Segmento auto-detectado";

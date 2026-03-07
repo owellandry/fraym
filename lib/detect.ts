@@ -28,19 +28,19 @@ function buildTimedTranscript(chunks: TranscriptChunk[]): string {
   return blocks.join("\n");
 }
 
-function safeSegmentTitle(title: string | undefined, start: number, end: number, index: number): string {
+function safeSegmentTitle(title: string | undefined): string {
   const clean = (title || "")
     .replace(/\[[^\]]+\]/g, " ")
+    .replace(/\(\d+:\d+[-–]\d+:\d+\)/g, " ")  // Strip "(2:20-3:05)" timestamps
     .replace(/\s+/g, " ")
     .trim();
 
-  if (clean && !/^short\s*#?\s*\d+$/i.test(clean)) {
+  // Reject generic titles like "Short #1", "Clip 1", "Segment 2", etc.
+  if (clean && !/^(short|clip|segment|momento)\s*#?\s*\d+$/i.test(clean)) {
     return clean.slice(0, 60);
   }
 
-  const startTs = formatTime(start);
-  const endTs = formatTime(end);
-  return `Clip ${index + 1} (${startTs}-${endTs})`;
+  return "";
 }
 
 async function detectWithAI(
@@ -74,7 +74,7 @@ ${durationRule}
 - Busca: momentos de tensión, humor, drama, reacciones fuertes, giros inesperados, frases impactantes, conflicto, confesiones
 - Los clips NO deben solaparse (mínimo 10s de separación)
 - El inicio del clip debe tener un "gancho" — algo que atrape al espectador en los primeros 3 segundos
-- Genera un título VIRAL corto para cada clip (máx 50 chars, estilo TikTok, usa emojis si queda bien)
+- Genera un título VIRAL corto para cada clip (máx 50 chars, estilo TikTok, usa emojis si queda bien). NUNCA uses titulos genericos como "Clip 1", "Momento 1", "Short #1" ni incluyas timestamps en el titulo
 
 TRANSCRIPCIÓN:
 ${transcript}
@@ -90,6 +90,9 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
       "meta-llama/llama-3.3-70b-instruct:free",
       "qwen/qwen3-4b:free",
       "mistralai/mistral-small-3.1-24b-instruct:free",
+      "deepseek/deepseek-r1-0528:free",
+      "google/gemma-3-4b-it:free",
+      "meta-llama/llama-4-scout:free",
     ];
 
     let data: any = null;
@@ -161,7 +164,7 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
       segments.push({
         start: Math.max(0, start),
         end: Math.min(videoDuration, end),
-        title: safeSegmentTitle(seg.title, start, end, idx),
+        title: safeSegmentTitle(seg.title) || seg.title || "",
         reason: (seg.reason || "AI detected").slice(0, 100),
         score: 100 - idx * 10,
       });
@@ -193,16 +196,17 @@ export async function detectBestMoments(
   const MAX = freeLength ? 300 : options.maxDuration!;
 
   if (chunks.length === 0) {
-    logAI.warn("Sin transcripcion — usando segmentos equidistantes");
+    logAI.warn("Sin transcripcion (0 chunks) — usando segmentos equidistantes sin titulos");
     return generateEvenSegments(videoDuration, TARGET, (MIN + MAX) / 2, []);
   }
 
+  logAI.info(`Transcripcion disponible: ${chunks.length} chunks, intentando IA...`);
   const aiSegments = await detectWithAI(chunks, videoDuration, options);
   if (aiSegments && aiSegments.length >= 2) {
     logAI.success(`Usando segmentos IA`, `${aiSegments.length} detectados`);
     return aiSegments;
   }
 
-  logAI.info("Fallback a scoring heuristico");
+  logAI.info(`IA retorno ${aiSegments?.length ?? 0} segmentos — fallback a scoring heuristico`);
   return detectWithHeuristics(chunks, videoDuration, options);
 }
