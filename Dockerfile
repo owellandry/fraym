@@ -1,6 +1,6 @@
 FROM node:22-slim AS base
 
-# Install system deps: ffmpeg, yt-dlp, curl
+# Install system deps: ffmpeg, yt-dlp, python3, bgutil plugin
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
@@ -27,9 +27,10 @@ COPY lib/ ./lib/
 COPY models/ ./models/
 COPY public/ ./public/
 COPY vite.config.ts tsconfig.json ./
+COPY entrypoint.sh ./
 
 # Create runtime directories
-RUN mkdir -p tmp public/outputs
+RUN mkdir -p tmp public/outputs && chmod +x entrypoint.sh
 
 # Build for production
 RUN bun run build
@@ -38,5 +39,6 @@ EXPOSE 9977
 
 ENV PORT=9977
 ENV NODE_ENV=production
+ENV XDG_CONFIG_HOME=/etc
 
-CMD ["bun", "run", "start"]
+CMD ["./entrypoint.sh"]
