@@ -85,6 +85,7 @@ export async function downloadVideo(url: string, jobId: string): Promise<string>
       "--no-mtime",
       "--no-part",
       "--js-runtimes", "node",
+      "--remote-components", "ejs:github",
       ...(process.env.BGUTIL_BASE_URL
         ? ["--extractor-args", `youtubepot-bgutilhttp:base_url=${process.env.BGUTIL_BASE_URL}`]
         : []),
@@ -159,6 +160,7 @@ export async function extractSubtitles(videoPath: string, jobId: string): Promis
       "--sub-format", "srt",
       "--skip-download",
       "--js-runtimes", "node",
+      "--remote-components", "ejs:github",
       ...(process.env.BGUTIL_BASE_URL
         ? ["--extractor-args", `youtubepot-bgutilhttp:base_url=${process.env.BGUTIL_BASE_URL}`]
         : []),
