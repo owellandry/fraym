@@ -1,6 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import {
+  Heart, MessageCircle, Share2, Bookmark,
+  Music, Download, X, Play, Check,
+  ArrowLeft,
+} from "lucide-react";
 import type { JobState } from "../hooks/useJob";
 
 interface Props {
@@ -62,29 +67,29 @@ export default function ResultsView({ job, url, onReset }: Props) {
       </nav>
 
       <main className="results-main">
-        {/* Desktop header: title + actions on same row */}
+        {/* Desktop header */}
         <div className="results-header-desktop desktop-only" style={{ animation: "fadeInUp 0.4s ease" }}>
           <h1 className="results-title">{job.outputs.length} shorts listos.</h1>
           <div className="results-header-actions">
             <span className="results-url">{shortUrl(url)}</span>
             <span className="results-count-pill">{job.outputs.length} de maximo</span>
             <button className="btn-primary" onClick={downloadAll}>
-              Descargar todo ↓
+              Descargar todo <Download size={14} />
             </button>
           </div>
         </div>
 
-        {/* Mobile header: stacked with success badge */}
+        {/* Mobile header */}
         <div className="results-header-mobile mobile-only" style={{ animation: "fadeInUp 0.4s ease" }}>
           <div className="results-success-row">
-            <span className="results-check">✓</span>
+            <span className="results-check"><Check size={12} strokeWidth={3} /></span>
             <span className="results-success-text">Completado</span>
           </div>
           <h1 className="results-title">{job.outputs.length} shorts listos</h1>
           <p className="results-subtitle">Descarga o comparte tus clips</p>
         </div>
 
-        {/* Desktop cards: vertical grid with 9:16 video */}
+        {/* Desktop cards */}
         <div className="cards-grid desktop-only">
           {job.outputs.map((output, i) => {
             const seg = job.segments[i];
@@ -108,7 +113,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                       className="card-dl"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      Descargar ↓
+                      Descargar <Download size={12} />
                     </a>
                   </div>
                 </div>
@@ -117,7 +122,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
           })}
         </div>
 
-        {/* Mobile cards: horizontal with thumbnail */}
+        {/* Mobile cards */}
         <div className="results-cards mobile-only">
           {job.outputs.map((output, i) => {
             const seg = job.segments[i];
@@ -132,7 +137,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 <div className="rcard-thumb">
                   <video src={output} preload="metadata" />
                   <button className="rcard-play" onClick={(e) => e.stopPropagation()}>
-                    ▶
+                    <Play size={16} fill="#fff" />
                   </button>
                 </div>
                 <div className="rcard-info">
@@ -150,7 +155,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                       title="Descargar"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      ↓
+                      <Download size={14} />
                     </a>
                   </div>
                 </div>
@@ -162,7 +167,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
         {/* Mobile bottom CTA */}
         <div className="results-bottom mobile-only" style={{ animation: "fadeInUp 0.5s ease 0.2s both" }}>
           <button className="results-dl-btn" onClick={downloadAll}>
-            <span>↓</span> Descargar todo
+            <Download size={16} /> Descargar todo
           </button>
           <span className="results-dl-meta">
             {job.outputs.length} clips · {totalDuration(job)} total
@@ -203,7 +208,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
               />
               <div className="preview-gradient" />
 
-              {/* Subtitles area */}
+              {/* Subtitles */}
               <div className="preview-subs">
                 <span className="preview-subs-text">
                   {previewSeg?.title || `Short #${(preview ?? 0) + 1}`}
@@ -213,19 +218,19 @@ export default function ResultsView({ job, url, onReset }: Props) {
               {/* TikTok action buttons */}
               <div className="preview-actions">
                 <div className="preview-action-col">
-                  <span className="preview-action-icon">♥</span>
+                  <Heart size={26} />
                   <span className="preview-action-count">—</span>
                 </div>
                 <div className="preview-action-col">
-                  <span className="preview-action-icon">💬</span>
+                  <MessageCircle size={24} />
                   <span className="preview-action-count">—</span>
                 </div>
                 <div className="preview-action-col">
-                  <span className="preview-action-icon">↗</span>
+                  <Share2 size={22} />
                   <span className="preview-action-count">—</span>
                 </div>
                 <div className="preview-action-col">
-                  <span className="preview-action-icon">⚑</span>
+                  <Bookmark size={22} />
                   <span className="preview-action-count">—</span>
                 </div>
               </div>
@@ -242,7 +247,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 <p className="preview-desc">
                   {previewSeg?.title || ""} #shorts #viral #fraym
                 </p>
-                <p className="preview-music">♫ Sonido original — @fraym.clips</p>
+                <p className="preview-music"><Music size={11} /> Sonido original — @fraym.clips</p>
               </div>
 
               {/* Progress bar */}
@@ -256,7 +261,9 @@ export default function ResultsView({ job, url, onReset }: Props) {
               <div className="preview-info-top">
                 <div className="preview-info-header">
                   <span className="preview-label">Vista previa</span>
-                  <button className="preview-close" onClick={() => setPreview(null)}>✕</button>
+                  <button className="preview-close" onClick={() => setPreview(null)}>
+                    <X size={18} />
+                  </button>
                 </div>
                 <div className="preview-info-content">
                   <span className="preview-clip-badge">CLIP {(preview ?? 0) + 1}</span>
@@ -264,12 +271,12 @@ export default function ResultsView({ job, url, onReset }: Props) {
                     {previewSeg?.title || `Short #${(preview ?? 0) + 1}`}
                   </h2>
                   <p className="preview-clip-reason">
-                    {previewSeg?.reason || "Segmento detectado automáticamente"}
+                    {previewSeg?.reason || "Segmento detectado automaticamente"}
                   </p>
                   <div className="preview-divider" />
                   <div className="preview-meta-grid">
                     <div className="preview-meta-row">
-                      <span className="preview-meta-label">Duración</span>
+                      <span className="preview-meta-label">Duracion</span>
                       <span className="preview-meta-value">
                         {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : "—"}
                       </span>
@@ -281,22 +288,24 @@ export default function ResultsView({ job, url, onReset }: Props) {
                       </span>
                     </div>
                     <div className="preview-meta-row">
-                      <span className="preview-meta-label">Resolución</span>
-                      <span className="preview-meta-value">1080×1920 · 720p</span>
+                      <span className="preview-meta-label">Resolucion</span>
+                      <span className="preview-meta-value">1080x1920 · 720p</span>
                     </div>
                   </div>
                 </div>
               </div>
               <a href={previewOutput} download className="preview-dl-btn">
-                <span>↓</span> Descargar clip
+                <Download size={16} /> Descargar clip
               </a>
             </div>
 
             {/* Mobile close + download */}
             <div className="preview-mobile-bar mobile-only">
-              <button className="preview-close-mobile" onClick={() => setPreview(null)}>✕</button>
+              <button className="preview-close-mobile" onClick={() => setPreview(null)}>
+                <X size={16} />
+              </button>
               <span className="preview-mobile-label">CLIP {(preview ?? 0) + 1} · {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : ""} · 720p</span>
-              <a href={previewOutput} download className="preview-dl-mobile">↓ Descargar</a>
+              <a href={previewOutput} download className="preview-dl-mobile"><Download size={14} /> Descargar</a>
             </div>
           </div>
         </div>
