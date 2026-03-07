@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs/promises";
 import * as fsSync from "fs";
 import os from "os";
-import { getYT, extractVideoId } from "./ytclient";
+import { extractVideoId, getVideoInfo, downloadVideo as ytDownload, downloadCaptionFile } from "./ytclient";
 
 const TMP_DIR = path.join(process.cwd(), "tmp");
 const OUTPUT_DIR = path.join(process.cwd(), "public", "outputs");
@@ -60,130 +60,49 @@ export async function ensureDirs() {
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
 }
 
-async function writeStreamToFile(stream: ReadableStream<Uint8Array>, filePath: string) {
-  const writer = fsSync.createWriteStream(filePath);
-  const reader = stream.getReader();
-
-  return new Promise<void>((resolve, reject) => {
-    const pump = async () => {
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) { writer.end(); break; }
-          if (!writer.write(value)) await new Promise(r => writer.once("drain", r));
-        }
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      } catch (err) {
-        writer.destroy();
-        reject(err);
-      }
-    };
-    pump();
-  });
-}
-
 export async function downloadVideo(url: string, jobId: string): Promise<string> {
   await ensureDirs();
   const videoId = extractVideoId(url);
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
-  const videoTmpPath = path.join(TMP_DIR, `${jobId}_v.mp4`);
-  const audioTmpPath = path.join(TMP_DIR, `${jobId}_a.mp4`);
 
-  const yt = await getYT();
+  console.log(`[fraym] Fetching info for ${videoId} via proxy...`);
+  const info = await getVideoInfo(videoId);
+  console.log(`[fraym] Downloading: ${info.title} [${info.bestQuality}]`);
 
-  console.log(`[ShortsAI] Fetching info for ${videoId}...`);
-  let info: Awaited<ReturnType<typeof yt.getInfo>> | null = null;
+  // dlsrv returns combined mp4 (video+audio), no merge needed
+  await ytDownload(videoId, outputPath, "720");
 
-  for (const client of ["ANDROID", "IOS", "TV_EMBEDDED"] as const) {
-    try {
-      info = await yt.getInfo(videoId, client);
-      const status = (info as any)?.playability_status?.status;
-      if (status && status !== "OK") {
-        console.log(`[ShortsAI] ${client} returned ${status}, trying next...`);
-        info = null;
-        continue;
-      }
-      console.log(`[ShortsAI] Using ${client} client`);
-      break;
-    } catch (err: any) {
-      console.log(`[ShortsAI] ${client} failed: ${err.message}`);
-    }
-  }
-
-  if (!info) {
-    throw new Error("No se pudo acceder al video. Puede ser privado, restringido por edad o no disponible.");
-  }
-
-  console.log(`[ShortsAI] Downloading: ${info.basic_info.title}`);
-
-  // Download video (up to 1080p) and audio as separate streams, then merge
-  const videoStream = await yt.download(videoId, {
-    type: "video",
-    quality: "1080p",
-    client: "ANDROID",
-  });
-  await writeStreamToFile(videoStream, videoTmpPath);
-
-  const audioStream = await yt.download(videoId, {
-    type: "audio",
-    quality: "best",
-    client: "ANDROID",
-  });
-  await writeStreamToFile(audioStream, audioTmpPath);
-
-  // Merge video + audio with ffmpeg
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn(FFMPEG, [
-      "-i", videoTmpPath,
-      "-i", audioTmpPath,
-      "-c:v", "copy",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
-      "-y", outputPath,
-    ]);
-    let stderr = "";
-    proc.stderr.on("data", d => { stderr += d.toString(); });
-    proc.on("close", code => {
-      if (code === 0) resolve();
-      else reject(new Error(`ffmpeg merge failed: ${stderr.slice(-300)}`));
-    });
-    proc.on("error", reject);
-  });
-
-  await fs.unlink(videoTmpPath).catch(() => {});
-  await fs.unlink(audioTmpPath).catch(() => {});
-
-  console.log(`[ShortsAI] Download complete: ${outputPath}`);
+  console.log(`[fraym] Download complete: ${outputPath}`);
   return outputPath;
 }
 
 export async function downloadSubtitles(url: string, jobId: string): Promise<string> {
   try {
     const videoId = extractVideoId(url);
-    const yt = await getYT();
-    const info = await yt.getInfo(videoId);
-    const tracks = info.captions?.caption_tracks ?? [];
+    const info = await getVideoInfo(videoId);
+    const tracks = info.captions || [];
 
     // Prefer Spanish, fallback to English
     const track =
-      tracks.find(t => t.language_code === "es" || t.language_code === "es-419") ??
-      tracks.find(t => t.language_code?.startsWith("es")) ??
-      tracks.find(t => t.language_code?.startsWith("en")) ??
+      tracks.find((t: any) => t.languageCode === "es" || t.languageCode === "es-419") ??
+      tracks.find((t: any) => t.languageCode?.startsWith("es")) ??
+      tracks.find((t: any) => t.languageCode?.startsWith("en")) ??
       tracks[0];
 
-    if (!track?.base_url) return "";
+    if (!track?.baseUrl) return "";
 
-    const res = await fetch(`${track.base_url}&fmt=vtt`);
-    if (!res.ok) return "";
-
-    const text = await res.text();
     const subPath = path.join(TMP_DIR, `${jobId}_subs.vtt`);
-    await fs.writeFile(subPath, text, "utf-8");
-    console.log(`[Worker] Subtitles downloaded (${track.language_code}): ${subPath}`);
-    return subPath;
+    await downloadCaptionFile(track.baseUrl, subPath);
+
+    try {
+      await fs.access(subPath);
+      console.log(`[fraym] Subtitles downloaded (${track.languageCode}): ${subPath}`);
+      return subPath;
+    } catch {
+      return "";
+    }
   } catch (err: any) {
-    console.log(`[Worker] Subtitle download failed: ${err.message}`);
+    console.log(`[fraym] Subtitle download failed: ${err.message}`);
     return "";
   }
 }

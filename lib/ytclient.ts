@@ -1,37 +1,118 @@
-// YouTube InnerTube client — uses the same API as official YouTube apps
-import { Innertube, UniversalCache } from "youtubei.js";
-import path from "path";
+// YouTube client — routes through Cloudflare Worker proxy (dlsrv HD downloads)
 import fs from "fs/promises";
+import * as fsSync from "fs";
 
-const CACHE_DIR = path.join(process.cwd(), "tmp", ".ytcache");
-let _yt: Innertube | null = null;
+const PROXY_URL = process.env.YT_PROXY_URL || "";
+const PROXY_SECRET = process.env.YT_PROXY_SECRET || "";
 
-export async function getYT(): Promise<Innertube> {
-  if (_yt) return _yt;
+function proxyHeaders() {
+  return { "Authorization": `Bearer ${PROXY_SECRET}` };
+}
 
-  await fs.mkdir(CACHE_DIR, { recursive: true });
+export function isProxyConfigured(): boolean {
+  return Boolean(PROXY_URL && PROXY_SECRET);
+}
 
-  const yt = await Innertube.create({
-    cache: new UniversalCache(true, CACHE_DIR),
-  });
+export interface VideoInfo {
+  title: string;
+  duration: number;
+  bestQuality: string;
+  captions: any[];
+}
 
-  // Try loading OAuth from cache (saved by setup:yt script)
-  try {
-    yt.session.on("update-credentials", () => {
-      console.log("[ShortsAI] YouTube credentials auto-refreshed");
-    });
-    await yt.session.oauth.init();
-    if (yt.session.logged_in) {
-      console.log("[ShortsAI] YouTube: authenticated with OAuth2");
-    } else {
-      console.log("[ShortsAI] YouTube: anonymous session (run 'bun run setup:yt' if downloads fail)");
-    }
-  } catch {
-    console.log("[ShortsAI] YouTube: anonymous session");
+export async function getVideoInfo(videoId: string): Promise<VideoInfo> {
+  if (!isProxyConfigured()) {
+    throw new Error("YouTube proxy not configured. Set YT_PROXY_URL and YT_PROXY_SECRET in .env");
   }
 
-  _yt = yt;
-  return _yt;
+  const res = await fetch(`${PROXY_URL}/info?v=${videoId}`, {
+    headers: proxyHeaders(),
+  });
+
+  if (!res.ok) {
+    const data: any = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Proxy error: ${res.status}`);
+  }
+
+  const data: any = await res.json();
+  if (data.status !== "OK") throw new Error("Video not available");
+
+  console.log(`[fraym] Video: ${data.title} [${data.bestQuality}] (${data.duration}s)`);
+
+  return {
+    title: data.title,
+    duration: data.duration,
+    bestQuality: data.bestQuality,
+    captions: data.captions || [],
+  };
+}
+
+export async function downloadVideo(videoId: string, filePath: string, quality = "720"): Promise<void> {
+  if (!isProxyConfigured()) {
+    throw new Error("YouTube proxy not configured");
+  }
+
+  // Step 1: Get the download tunnel URL
+  const dlRes = await fetch(`${PROXY_URL}/download?v=${videoId}&q=${quality}`, {
+    headers: proxyHeaders(),
+  });
+
+  if (!dlRes.ok) {
+    const data: any = await dlRes.json().catch(() => ({}));
+    throw new Error(data.error || `Download error: ${dlRes.status}`);
+  }
+
+  const dlData: any = await dlRes.json();
+  if (dlData.status !== "OK" || !dlData.url) {
+    throw new Error("Failed to get download URL");
+  }
+
+  console.log(`[fraym] Downloading ${quality}p: ${dlData.filename || videoId}`);
+
+  // Step 2: Download the video through our proxy (to avoid IP issues)
+  const streamUrl = `${PROXY_URL}/stream?url=${encodeURIComponent(dlData.url)}`;
+  const res = await fetch(streamUrl, {
+    headers: proxyHeaders(),
+  });
+
+  if (!res.ok || !res.body) {
+    throw new Error(`Stream download failed: ${res.status}`);
+  }
+
+  // Step 3: Write to file
+  const writer = fsSync.createWriteStream(filePath);
+  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+
+  return new Promise<void>((resolve, reject) => {
+    const pump = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { writer.end(); break; }
+          if (!writer.write(value)) {
+            await new Promise(r => writer.once("drain", r));
+          }
+        }
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      } catch (err) {
+        writer.destroy();
+        reject(err);
+      }
+    };
+    pump();
+  });
+}
+
+export async function downloadCaptionFile(baseUrl: string, filePath: string): Promise<void> {
+  if (!isProxyConfigured()) throw new Error("YouTube proxy not configured");
+
+  const proxyUrl = `${PROXY_URL}/caption-file?url=${encodeURIComponent(baseUrl + "&fmt=vtt")}`;
+  const res = await fetch(proxyUrl, { headers: proxyHeaders() });
+  if (!res.ok) return;
+
+  const text = await res.text();
+  await fs.writeFile(filePath, text, "utf-8");
 }
 
 export function extractVideoId(url: string): string {
@@ -45,5 +126,5 @@ export function extractVideoId(url: string): string {
     const m = url.match(p);
     if (m) return m[1]!;
   }
-  throw new Error(`URL de YouTube inválida: ${url}`);
+  throw new Error(`URL de YouTube invalida: ${url}`);
 }

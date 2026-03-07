@@ -8,6 +8,8 @@ services:
     environment:
       - PORT=9977
       - NODE_ENV=production
+      - YT_PROXY_URL=${YT_PROXY_URL}
+      - YT_PROXY_SECRET=${YT_PROXY_SECRET}
     volumes:
       - fraym_tmp:/app/tmp
       - fraym_outputs:/app/public/outputs

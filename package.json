@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "openvite dev",
     "build": "openvite build",
-    "start": "openvite start",
-    "setup:yt": "bun scripts/setup-yt.ts"
+    "start": "openvite start"
   },
   "dependencies": {
     "fluent-ffmpeg": "^2.1.3",
@@ -14,8 +13,7 @@
     "openvite": "^0.0.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "sharp": "^0.34.5",
-    "youtubei.js": "^16.0.1"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/bun": "latest",
