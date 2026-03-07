@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs/promises";
 import * as fsSync from "fs";
 import os from "os";
+import { getYT, extractVideoId } from "./ytclient";
 
 const TMP_DIR = path.join(process.cwd(), "tmp");
 const OUTPUT_DIR = path.join(process.cwd(), "public", "outputs");
@@ -15,23 +16,17 @@ function findBinary(name: string): string {
   const wingetPkgs = path.join(home, "AppData", "Local", "Microsoft", "WinGet", "Packages");
   const candidates: string[] = [];
 
-  if (name === "yt-dlp") {
-    candidates.push(
-      path.join(wingetPkgs, "yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe", "yt-dlp.exe"),
-    );
-  } else {
-    const ffmpegPkgDirs = [
-      "yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
-      "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
-    ];
-    for (const pkg of ffmpegPkgDirs) {
-      const pkgPath = path.join(wingetPkgs, pkg);
-      try {
-        for (const entry of fsSync.readdirSync(pkgPath)) {
-          candidates.push(path.join(pkgPath, entry, "bin", `${name}.exe`));
-        }
-      } catch {}
-    }
+  const ffmpegPkgDirs = [
+    "yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
+    "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
+  ];
+  for (const pkg of ffmpegPkgDirs) {
+    const pkgPath = path.join(wingetPkgs, pkg);
+    try {
+      for (const entry of fsSync.readdirSync(pkgPath)) {
+        candidates.push(path.join(pkgPath, entry, "bin", `${name}.exe`));
+      }
+    } catch {}
   }
 
   candidates.push(
@@ -46,98 +41,154 @@ function findBinary(name: string): string {
     } catch {}
   }
 
-  // Last resort: try `where` command on Windows
   try {
     const result = execSync(`where ${name}`, { encoding: "utf-8" }).trim().split("\n")[0]!.trim();
-    if (result) {
-      console.log(`[ShortsAI] Found ${name} via where: ${result}`);
-      return result;
-    }
+    if (result) return result;
   } catch {}
 
-  console.log(`[ShortsAI] WARNING: ${name} not found anywhere!`);
   return name;
 }
 
-const YTDLP = findBinary("yt-dlp");
 const FFMPEG = findBinary("ffmpeg");
 const FFPROBE = findBinary("ffprobe");
-// yt-dlp needs the directory containing ffmpeg for merging
-const FFMPEG_DIR = path.dirname(FFMPEG);
 
-export function getYtdlpPath() { return YTDLP; }
-
-export function getYtdlpAuthArgs(): string[] {
-  const args: string[] = [];
-  const cookiesFile = process.env.YTDLP_COOKIES_FILE?.trim();
-  const userAgent = process.env.YTDLP_USER_AGENT?.trim();
-
-  if (cookiesFile && fsSync.existsSync(cookiesFile)) {
-    args.push("--cookies", cookiesFile);
-  }
-
-  if (userAgent) args.push("--user-agent", userAgent);
-
-  return args;
-}
+export function getFfmpegPath() { return FFMPEG; }
+export function getFfprobePath() { return FFPROBE; }
 
 export async function ensureDirs() {
   await fs.mkdir(TMP_DIR, { recursive: true });
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
 }
 
-export async function downloadVideo(url: string, jobId: string): Promise<string> {
-  await ensureDirs();
-  const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
-  const authArgs = getYtdlpAuthArgs();
+async function writeStreamToFile(stream: ReadableStream<Uint8Array>, filePath: string) {
+  const writer = fsSync.createWriteStream(filePath);
+  const reader = stream.getReader();
 
-  return new Promise((resolve, reject) => {
-    const proc = spawn(YTDLP, [
-      ...authArgs,
-      "--ffmpeg-location", FFMPEG_DIR,
-      "-f", "bestvideo[height<=1080]+bestaudio/best",
-      "--merge-output-format", "mp4",
-      "--concurrent-fragments", "4",
-      "--no-mtime",
-      "--no-part",
-      "-o", outputPath,
-      "--no-playlist",
-      url,
-    ]);
-
-    let stderr = "";
-    proc.stdout.on("data", (data) => { console.log(`[yt-dlp] ${data.toString().trim()}`); });
-    proc.stderr.on("data", (data) => { stderr += data.toString(); });
-    proc.on("close", async (code) => {
-      if (code === 0) {
-        // Verify the merged file exists
-        try {
-          await fs.access(outputPath);
-          console.log(`[ShortsAI] Download complete: ${outputPath}`);
-          resolve(outputPath);
-        } catch {
-          // yt-dlp might have not merged, check for partial files
-          const files = await fs.readdir(TMP_DIR);
-          const partials = files.filter((f) => f.startsWith(jobId));
-          reject(new Error(`yt-dlp finished but merged file not found. Files: ${partials.join(", ")}\nstderr: ${stderr}`));
+  return new Promise<void>((resolve, reject) => {
+    const pump = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { writer.end(); break; }
+          if (!writer.write(value)) await new Promise(r => writer.once("drain", r));
         }
-      } else {
-        const blockedByYoutube = /Sign in to confirm you(?:'|’)re not a bot/i.test(stderr);
-        const authHint = blockedByYoutube
-          ? "\nYouTube blocked anonymous requests. Set YTDLP_COOKIES_FILE (recommended in Docker) or YTDLP_COOKIES_FROM_BROWSER."
-          : "";
-        reject(new Error(`yt-dlp failed (code ${code}): ${stderr}${authHint}`));
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      } catch (err) {
+        writer.destroy();
+        reject(err);
       }
-    });
-    proc.on("error", (err) => reject(new Error(`yt-dlp not found: ${err.message}`)));
+    };
+    pump();
   });
 }
 
-export async function getVideoDuration(videoPath: string): Promise<number> {
-  console.log(`[ShortsAI] Running ffprobe: ${FFPROBE}`);
-  console.log(`[ShortsAI] Video path: ${videoPath}`);
+export async function downloadVideo(url: string, jobId: string): Promise<string> {
+  await ensureDirs();
+  const videoId = extractVideoId(url);
+  const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
+  const videoTmpPath = path.join(TMP_DIR, `${jobId}_v.mp4`);
+  const audioTmpPath = path.join(TMP_DIR, `${jobId}_a.mp4`);
 
-  // Check if video file exists
+  const yt = await getYT();
+
+  console.log(`[ShortsAI] Fetching info for ${videoId}...`);
+  let info: Awaited<ReturnType<typeof yt.getInfo>> | null = null;
+
+  for (const client of ["ANDROID", "IOS", "TV_EMBEDDED"] as const) {
+    try {
+      info = await yt.getInfo(videoId, client);
+      const status = (info as any)?.playability_status?.status;
+      if (status && status !== "OK") {
+        console.log(`[ShortsAI] ${client} returned ${status}, trying next...`);
+        info = null;
+        continue;
+      }
+      console.log(`[ShortsAI] Using ${client} client`);
+      break;
+    } catch (err: any) {
+      console.log(`[ShortsAI] ${client} failed: ${err.message}`);
+    }
+  }
+
+  if (!info) {
+    throw new Error("No se pudo acceder al video. Puede ser privado, restringido por edad o no disponible.");
+  }
+
+  console.log(`[ShortsAI] Downloading: ${info.basic_info.title}`);
+
+  // Download video (up to 1080p) and audio as separate streams, then merge
+  const videoStream = await yt.download(videoId, {
+    type: "video",
+    quality: "1080p",
+    client: "ANDROID",
+  });
+  await writeStreamToFile(videoStream, videoTmpPath);
+
+  const audioStream = await yt.download(videoId, {
+    type: "audio",
+    quality: "best",
+    client: "ANDROID",
+  });
+  await writeStreamToFile(audioStream, audioTmpPath);
+
+  // Merge video + audio with ffmpeg
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(FFMPEG, [
+      "-i", videoTmpPath,
+      "-i", audioTmpPath,
+      "-c:v", "copy",
+      "-c:a", "aac",
+      "-movflags", "+faststart",
+      "-y", outputPath,
+    ]);
+    let stderr = "";
+    proc.stderr.on("data", d => { stderr += d.toString(); });
+    proc.on("close", code => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg merge failed: ${stderr.slice(-300)}`));
+    });
+    proc.on("error", reject);
+  });
+
+  await fs.unlink(videoTmpPath).catch(() => {});
+  await fs.unlink(audioTmpPath).catch(() => {});
+
+  console.log(`[ShortsAI] Download complete: ${outputPath}`);
+  return outputPath;
+}
+
+export async function downloadSubtitles(url: string, jobId: string): Promise<string> {
+  try {
+    const videoId = extractVideoId(url);
+    const yt = await getYT();
+    const info = await yt.getInfo(videoId);
+    const tracks = info.captions?.caption_tracks ?? [];
+
+    // Prefer Spanish, fallback to English
+    const track =
+      tracks.find(t => t.language_code === "es" || t.language_code === "es-419") ??
+      tracks.find(t => t.language_code?.startsWith("es")) ??
+      tracks.find(t => t.language_code?.startsWith("en")) ??
+      tracks[0];
+
+    if (!track?.base_url) return "";
+
+    const res = await fetch(`${track.base_url}&fmt=vtt`);
+    if (!res.ok) return "";
+
+    const text = await res.text();
+    const subPath = path.join(TMP_DIR, `${jobId}_subs.vtt`);
+    await fs.writeFile(subPath, text, "utf-8");
+    console.log(`[Worker] Subtitles downloaded (${track.language_code}): ${subPath}`);
+    return subPath;
+  } catch (err: any) {
+    console.log(`[Worker] Subtitle download failed: ${err.message}`);
+    return "";
+  }
+}
+
+export async function getVideoDuration(videoPath: string): Promise<number> {
   try {
     await fs.access(videoPath);
   } catch {
@@ -151,48 +202,15 @@ export async function getVideoDuration(videoPath: string): Promise<number> {
       "-of", "default=noprint_wrappers=1:nokey=1",
       videoPath,
     ]);
-
     let stdout = "";
     let stderr = "";
-    proc.stdout.on("data", (data) => { stdout += data.toString(); });
-    proc.stderr.on("data", (data) => { stderr += data.toString(); });
-    proc.on("close", (code) => {
+    proc.stdout.on("data", d => { stdout += d.toString(); });
+    proc.stderr.on("data", d => { stderr += d.toString(); });
+    proc.on("close", code => {
       if (code === 0) resolve(parseFloat(stdout.trim()));
       else reject(new Error(`ffprobe failed (code ${code}): ${stderr}`));
     });
-    proc.on("error", (err) => reject(new Error(`ffprobe not found at "${FFPROBE}": ${err.message}`)));
-  });
-}
-
-export async function extractSubtitles(videoPath: string, jobId: string): Promise<string> {
-  await ensureDirs();
-  const subtitlePath = path.join(TMP_DIR, `${jobId}.srt`);
-  const authArgs = getYtdlpAuthArgs();
-
-  return new Promise((resolve, reject) => {
-    const proc = spawn(YTDLP, [
-      ...authArgs,
-      "--write-auto-sub",
-      "--sub-lang", "en,es",
-      "--sub-format", "srt",
-      "--skip-download",
-      "-o", path.join(TMP_DIR, jobId),
-      videoPath,
-    ]);
-
-    let stderr = "";
-    proc.stderr.on("data", (data) => { stderr += data.toString(); });
-    proc.on("close", async () => {
-      // Try to find any subtitle file
-      const files = await fs.readdir(TMP_DIR);
-      const subFile = files.find((f) => f.startsWith(jobId) && (f.endsWith(".srt") || f.endsWith(".vtt")));
-      if (subFile) {
-        resolve(path.join(TMP_DIR, subFile));
-      } else {
-        resolve(""); // No subtitles found, we'll work without them
-      }
-    });
-    proc.on("error", () => resolve("")); // Non-critical
+    proc.on("error", err => reject(new Error(`ffprobe not found: ${err.message}`)));
   });
 }
 
@@ -203,14 +221,11 @@ interface Segment {
   reason: string;
 }
 
-export function getFfmpegPath() { return FFMPEG; }
-export function getFfprobePath() { return FFPROBE; }
-
 // Detect scene changes near a timestamp to find cleaner cut points
 export async function findNearestSceneCut(
   videoPath: string,
   targetTime: number,
-  searchRadius: number = 3, // search +/- 3 seconds
+  searchRadius: number = 3,
   minTime: number = 0,
   maxTime: number = Infinity
 ): Promise<number> {
@@ -218,18 +233,7 @@ export async function findNearestSceneCut(
   const searchDuration = searchRadius * 2;
 
   return new Promise((resolve) => {
-    const proc = spawn(FFPROBE, [
-      "-v", "quiet",
-      "-read_intervals", `${searchStart}%+${searchDuration}`,
-      "-show_frames",
-      "-select_streams", "v",
-      "-show_entries", "frame=pts_time,pkt_pts_time",
-      "-of", "csv=p=0",
-      videoPath,
-    ]);
-
-    // Simpler approach: use ffmpeg scene detection
-    const proc2 = spawn(FFMPEG, [
+    const proc = spawn(FFMPEG, [
       "-ss", searchStart.toString(),
       "-i", videoPath,
       "-t", searchDuration.toString(),
@@ -240,44 +244,28 @@ export async function findNearestSceneCut(
     ]);
 
     let stderr = "";
-    proc.kill(); // kill ffprobe approach, use ffmpeg
-    proc2.stderr.on("data", (data) => { stderr += data.toString(); });
-    proc2.on("close", () => {
-      // Parse scene change timestamps from showinfo output
+    proc.stderr.on("data", d => { stderr += d.toString(); });
+    proc.on("close", () => {
       const sceneChanges: number[] = [];
       const regex = /pts_time:(\d+\.?\d*)/g;
       let match;
       while ((match = regex.exec(stderr))) {
         const absTime = searchStart + parseFloat(match[1]!);
-        if (absTime >= minTime && absTime <= maxTime) {
-          sceneChanges.push(absTime);
-        }
+        if (absTime >= minTime && absTime <= maxTime) sceneChanges.push(absTime);
       }
 
-      if (sceneChanges.length === 0) {
-        resolve(targetTime); // No scene changes found, keep original
-        return;
-      }
+      if (sceneChanges.length === 0) { resolve(targetTime); return; }
 
-      // Find the scene change closest to our target
       let closest = sceneChanges[0]!;
       let minDist = Math.abs(closest - targetTime);
       for (const sc of sceneChanges) {
         const dist = Math.abs(sc - targetTime);
-        if (dist < minDist) {
-          closest = sc;
-          minDist = dist;
-        }
+        if (dist < minDist) { closest = sc; minDist = dist; }
       }
 
-      if (minDist < searchRadius) {
-        console.log(`[SceneCut] Adjusted ${targetTime.toFixed(1)}s -> ${closest.toFixed(1)}s (scene change)`);
-        resolve(closest);
-      } else {
-        resolve(targetTime);
-      }
+      resolve(minDist < searchRadius ? closest : targetTime);
     });
-    proc2.on("error", () => resolve(targetTime));
+    proc.on("error", () => resolve(targetTime));
   });
 }
 
@@ -294,12 +282,9 @@ export async function cutSegment(
   const outputPath = path.join(OUTPUT_DIR, outputName);
   const duration = segment.end - segment.start;
 
-  // Default: smart center crop + mirror (no black bars!)
   let vf = cropFilter || "crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920,hflip";
 
-  // Burn in word-by-word subtitles if available
   if (assSubtitlePath) {
-    // FFmpeg needs forward slashes and escaped colons for Windows paths in filter
     const escapedPath = assSubtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
     vf += `,ass='${escapedPath}'`;
     console.log(`[ShortsAI] Burning subtitles: ${assSubtitlePath}`);
@@ -324,8 +309,8 @@ export async function cutSegment(
     ]);
 
     let stderr = "";
-    proc.stderr.on("data", (data) => { stderr += data.toString(); });
-    proc.on("close", (code) => {
+    proc.stderr.on("data", d => { stderr += d.toString(); });
+    proc.on("close", code => {
       if (code === 0) resolve(`/outputs/${outputName}`);
       else reject(new Error(`ffmpeg cut failed for segment ${index + 1}: ${stderr.slice(-200)}`));
     });

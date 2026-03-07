@@ -1,13 +1,10 @@
 // Background worker — processes a single job through the full pipeline
-import { downloadVideo, getVideoDuration, getYtdlpPath, getFfmpegPath, cutSegment, cleanupJob, findNearestSceneCut, getYtdlpAuthArgs } from "./video";
+import { downloadVideo, downloadSubtitles, getVideoDuration, getFfmpegPath, cutSegment, cleanupJob, findNearestSceneCut } from "./video";
 import { parseSubtitles, detectBestMoments } from "./ai";
 import { detectCropRegion, buildCropFilter } from "./smartcrop";
 import { generateSubtitleFile } from "./subtitles";
 import { updateJob, setWorker } from "./queue";
 import type { Job } from "./queue";
-import { spawn } from "child_process";
-import path from "path";
-import fs from "fs/promises";
 
 // Smooth progress — animates from current to target over duration
 function smoothProgress(
@@ -17,7 +14,7 @@ function smoothProgress(
   durationMs: number,
   message?: string
 ): { stop: () => void } {
-  const steps = Math.max(1, Math.round(durationMs / 300)); // update every ~300ms
+  const steps = Math.max(1, Math.round(durationMs / 300));
   const increment = (to - from) / steps;
   const interval = durationMs / steps;
   let current = from;
@@ -38,43 +35,6 @@ function smoothProgress(
       updateJob(jobId, { progress: Math.round(to) });
     },
   };
-}
-
-async function downloadSubtitles(url: string, jobId: string): Promise<string> {
-  const ytdlp = getYtdlpPath();
-  const tmpDir = path.join(process.cwd(), "tmp");
-  const outputTemplate = path.join(tmpDir, `${jobId}_subs`);
-
-  return new Promise((resolve) => {
-    const proc = spawn(ytdlp, [
-      ...getYtdlpAuthArgs(),
-      "--write-auto-sub",
-      "--write-sub",
-      "--sub-lang", "es,en,es-419",
-      "--sub-format", "vtt",
-      "--skip-download",
-      "-o", outputTemplate,
-      url,
-    ]);
-
-    proc.on("close", async () => {
-      try {
-        const files = await fs.readdir(tmpDir);
-        const subFile = files.find(
-          (f) => f.startsWith(`${jobId}_subs`) && (f.endsWith(".vtt") || f.endsWith(".srt"))
-        );
-        if (subFile) {
-          console.log(`[Worker] Found subtitles: ${subFile}`);
-          resolve(path.join(tmpDir, subFile));
-        } else {
-          resolve("");
-        }
-      } catch {
-        resolve("");
-      }
-    });
-    proc.on("error", () => resolve(""));
-  });
 }
 
 async function processJob(job: Job): Promise<void> {
@@ -144,7 +104,6 @@ async function processJob(job: Job): Promise<void> {
     message: "Ajustando cortes a escenas...",
   });
 
-  // Snap ALL cut points in parallel (2 per segment)
   const sceneProgress = smoothProgress(id, 51, 56, 6000, "Ajustando cortes a escenas...");
   const sceneCuts = await Promise.all(
     segments.flatMap((seg) => [
@@ -162,7 +121,6 @@ async function processJob(job: Job): Promise<void> {
 
   const ffmpegPath = getFfmpegPath();
 
-  // Detect crop regions with YOLO
   const yoloProgress = smoothProgress(id, 57, 64, 10000, "Detectando encuadre (YOLO)...");
   const cropRegions = await Promise.all(
     segments.map((seg, i) =>
@@ -173,7 +131,6 @@ async function processJob(job: Job): Promise<void> {
 
   updateJob(id, { progress: 65, message: "Generando subtitulos..." });
 
-  // Generate subtitle files
   const vttPath = subtitlePath && subtitlePath.endsWith(".vtt") ? subtitlePath : undefined;
   const subtitleFiles = await Promise.all(
     segments.map((seg, i) =>
@@ -183,7 +140,6 @@ async function processJob(job: Job): Promise<void> {
 
   updateJob(id, { progress: 70, message: "Cortando clips..." });
 
-  // Cut ALL clips in parallel — track completions for progress
   const totalClips = segments.length;
   let clipsReady = 0;
 
@@ -210,13 +166,9 @@ async function processJob(job: Job): Promise<void> {
     message: `${outputs.length} shorts generados`,
   });
 
-  // Cleanup temp files (keep outputs)
   await cleanupJob(id).catch(() => {});
   console.log(`[Worker] Job ${id} completed: ${outputs.length} shorts`);
 }
 
-// Register the worker
 setWorker(processJob);
-
-// Export to ensure this module is loaded
 export const workerReady = true;

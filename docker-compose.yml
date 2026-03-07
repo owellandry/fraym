@@ -8,11 +8,9 @@ services:
     environment:
       - PORT=9977
       - NODE_ENV=production
-      - YTDLP_COOKIES_FILE=/app/cookies.txt
     volumes:
       - fraym_tmp:/app/tmp
       - fraym_outputs:/app/public/outputs
-      - ./cookies.txt:/app/cookies.txt:ro
     restart: unless-stopped
 
 volumes:
