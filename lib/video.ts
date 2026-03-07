@@ -230,7 +230,7 @@ export async function cutSegment(
     let stderr = "";
     proc.stderr.on("data", d => { stderr += d.toString(); });
     proc.on("close", code => {
-      if (code === 0) resolve(`/outputs/${outputName}`);
+      if (code === 0) resolve(`/api/outputs?file=${outputName}`);
       else reject(new Error(`ffmpeg cut failed for segment ${index + 1}: ${stderr.slice(-200)}`));
     });
     proc.on("error", () => reject(new Error("ffmpeg not found.")));
