@@ -91,6 +91,29 @@ if [ "$NEED_KEY" = true ]; then
   fi
 fi
 
+# ─── Cookies setup ───
+if [ ! -f cookies.txt ]; then
+  echo ""
+  echo -e "       ${BOLD}Cookies de YouTube${NC} ${DIM}(necesario para descargar videos desde servidores)${NC}"
+  echo -e "       ${DIM}YouTube bloquea IPs de servidor sin autenticación.${NC}"
+  echo ""
+  echo -e "       ${DIM}Para obtener tus cookies:${NC}"
+  echo -e "       ${DIM}1. Instala la extensión${NC} ${CYAN}Get cookies.txt LOCALLY${NC} ${DIM}en Chrome/Firefox${NC}"
+  echo -e "       ${DIM}2. Ve a youtube.com (con sesión iniciada)${NC}"
+  echo -e "       ${DIM}3. Haz clic en la extensión → Export${NC}"
+  echo -e "       ${DIM}4. Sube el archivo a este servidor:${NC}"
+  echo ""
+  SERVER_IP_HINT=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "TU_IP")
+  echo -e "       ${CYAN}scp cookies.txt root@${SERVER_IP_HINT}:${INSTALL_DIR}/cookies.txt${NC}"
+  echo ""
+  echo -e "       ${DIM}Luego ejecuta de nuevo:${NC} ${CYAN}bash install.sh${NC}"
+  echo ""
+  warn "Sin cookies — la descarga de videos puede fallar en este servidor"
+  warn "Continuando de todas formas..."
+else
+  ok "cookies.txt encontrado — YouTube autenticado"
+fi
+
 # ─── Step 4: Build ───
 step 4 "Construyendo imagen Docker..."
 echo -e "       ${DIM}Esto puede tomar unos minutos la primera vez...${NC}"
