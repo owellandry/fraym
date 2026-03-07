@@ -159,6 +159,20 @@ export default function ResultsView({ job, url, onReset }: Props) {
           </span>
         </div>
       </main>
+
+      <footer className="feature-bar desktop-only">
+        {[
+          "Face Tracking YOLO",
+          "Subtitulos sincronizados",
+          "IA detecta momentos virales",
+          "Espejo automatico",
+        ].map((feat) => (
+          <div key={feat} className="feature-item">
+            <span className="feature-dot">&#9673;</span>
+            <span className="feature-text">{feat}</span>
+          </div>
+        ))}
+      </footer>
     </div>
   );
 }

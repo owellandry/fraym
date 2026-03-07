@@ -106,10 +106,21 @@ export function scoreTranscriptWindow(
 
 export function buildTitle(text: string): string {
   const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 5);
-  if (sentences.length > 0) {
-    const first = sentences[0]!.trim();
-    if (first.length <= 50) return first;
-    return first.slice(0, 47) + "...";
+
+  // Prefer sentences with hooks or intensity words
+  const interesting = sentences.find(s => {
+    const lower = s.toLowerCase();
+    return HOOK_OPENERS.some(h => lower.includes(h))
+      || INTENSITY_HIGH.some(w => lower.includes(w))
+      || CONTRAST_MARKERS.some(m => lower.includes(m))
+      || lower.includes("?");
+  });
+
+  const best = interesting || sentences[0];
+  if (best) {
+    const trimmed = best.trim();
+    if (trimmed.length <= 50) return trimmed;
+    return trimmed.slice(0, 47) + "...";
   }
   const words = text.split(/\s+/).slice(0, 8).join(" ");
   return words.length > 50 ? words.slice(0, 47) + "..." : words;
@@ -124,15 +135,34 @@ export function generateEvenSegments(duration: number, count: number = 4, segDur
     const center = spacing * (i + 1);
     const start = Math.max(0, center - segDur / 2);
     const end = Math.min(duration, start + segDur);
+    const posLabel = positionTitle(i, count, start, duration);
     segments.push({
       start, end,
-      title: `Momento ${i + 1}`,
-      reason: "Segmento distribuido",
+      title: posLabel,
+      reason: "Segmento auto-detectado",
       score: 0,
     });
   }
 
   return segments;
+}
+
+function positionTitle(index: number, total: number, start: number, duration: number): string {
+  const pct = start / duration;
+  const m = Math.floor(start / 60);
+  const s = Math.floor(start % 60);
+  const ts = `${m}:${s.toString().padStart(2, "0")}`;
+
+  if (total <= 2) {
+    return index === 0 ? `Mejor momento (${ts})` : `Segundo momento (${ts})`;
+  }
+
+  if (pct < 0.15) return `Inicio destacado (${ts})`;
+  if (pct < 0.35) return `Primer acto (${ts})`;
+  if (pct < 0.55) return `Momento central (${ts})`;
+  if (pct < 0.75) return `Punto clave (${ts})`;
+  if (pct < 0.9) return `Climax (${ts})`;
+  return `Final destacado (${ts})`;
 }
 
 export function detectWithHeuristics(
@@ -145,7 +175,7 @@ export function detectWithHeuristics(
   const SHORT_MAX = (options.maxDuration && options.maxDuration > 0) ? options.maxDuration : 300;
   const STEP = 2;
 
-  console.log(`[fraym] Heuristic: analyzing ${chunks.length} chunks`);
+  // Heuristic scoring across chunks
 
   interface ScoredWindow {
     start: number;
