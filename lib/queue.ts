@@ -2,9 +2,11 @@
 // For production: swap with BullMQ + Redis
 
 export type JobStatus = "queued" | "downloading" | "analyzing" | "processing" | "done" | "error";
+export type JobType = "clip" | "ai-video";
 
 export interface Job {
   id: string;
+  type: JobType;
   url: string;
   status: JobStatus;
   progress: number;
@@ -16,6 +18,14 @@ export interface Job {
   outputs: string[];
   error?: string;
   videoPath?: string;
+  script?: string;
+  // AI video options
+  aiOptions?: {
+    topic: string;
+    voice: string;
+    background: string;
+    style: string;
+  };
   createdAt: number;
   updatedAt: number;
 }
@@ -28,22 +38,30 @@ const LISTENERS = new Map<string, Set<JobListener>>();
 let activeJobs = 0;
 const pendingQueue: string[] = [];
 
-// Worker function — set externally to avoid circular imports
-let workerFn: ((job: Job) => Promise<void>) | null = null;
+// Worker functions — set externally to avoid circular imports
+let clipWorkerFn: ((job: Job) => Promise<void>) | null = null;
+let aiVideoWorkerFn: ((job: Job) => Promise<void>) | null = null;
 
 export function setWorker(fn: (job: Job) => Promise<void>) {
-  workerFn = fn;
+  clipWorkerFn = fn;
+}
+
+export function setAIVideoWorker(fn: (job: Job) => Promise<void>) {
+  aiVideoWorkerFn = fn;
 }
 
 export function createJob(params: {
   id: string;
+  type?: JobType;
   url: string;
   clipCount: number;
   minDuration: number;
   maxDuration: number;
+  aiOptions?: Job["aiOptions"];
 }): Job {
   const job: Job = {
     id: params.id,
+    type: params.type || "clip",
     url: params.url,
     status: "queued",
     progress: 0,
@@ -53,6 +71,7 @@ export function createJob(params: {
     maxDuration: params.maxDuration,
     segments: [],
     outputs: [],
+    aiOptions: params.aiOptions,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -102,14 +121,18 @@ async function processQueue() {
     if (!jobId) break;
 
     const job = JOBS.get(jobId);
-    if (!job || !workerFn) continue;
+    if (!job) continue;
+
+    // Pick the right worker based on job type
+    const worker = job.type === "ai-video" ? aiVideoWorkerFn : clipWorkerFn;
+    if (!worker) continue;
 
     activeJobs++;
 
     // Run in background — don't await
-    workerFn(job)
+    worker(job)
       .catch((err) => {
-        console.error(`[job:${jobId}] ✗ ERROR:`, err.message || err);
+        console.error(`[job:${jobId}] ERROR:`, err.message || err);
         if (err.stack) console.error(err.stack);
         updateJob(jobId, {
           status: "error",

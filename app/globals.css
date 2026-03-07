@@ -1233,3 +1233,101 @@ input { font-family: inherit; }
     border-radius: 0;
   }
 }
+
+/* === AI VIDEO MODE === */
+
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.mode-tab {
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-tab:hover { color: var(--text); }
+
+.mode-tab--active {
+  background: var(--text);
+  color: #fff;
+}
+
+.topic-input {
+  width: 100%;
+  max-width: 620px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--text);
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.topic-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.topic-input::placeholder { color: var(--text-faint); }
+
+.ai-input-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.ai-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.ai-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.ai-option-label {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 768px) {
+  .mode-tabs { width: 100%; }
+  .mode-tab { flex: 1; text-align: center; font-size: 13px; padding: 8px 12px; }
+  .topic-input { max-width: 100%; font-size: 16px; }
+  .ai-options { gap: 12px; }
+  .ai-option-group .pills-group { justify-content: center; }
+}

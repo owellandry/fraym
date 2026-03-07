@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import { createJob, getJob } from "@/lib/queue";
 import { logAPI, printBanner } from "@/lib/logger";
-// Import worker to register it
+// Import workers to register them
 import "@/lib/worker";
+import "@/lib/ai-worker";
 
 // Print startup banner on first load
 printBanner();
@@ -10,13 +11,47 @@ printBanner();
 // POST /api/jobs — Create a new job (returns immediately)
 export async function POST(request: Request) {
   try {
-    const { url, clipCount, minDuration, maxDuration } = await request.json();
+    const body = await request.json();
+    const id = crypto.randomUUID().slice(0, 8);
+
+    // AI Video generation
+    if (body.type === "ai-video") {
+      const { topic, voice, background, style } = body;
+
+      if (!topic || typeof topic !== "string") {
+        return Response.json({ error: "Topic is required" }, { status: 400 });
+      }
+
+      const job = createJob({
+        id,
+        type: "ai-video",
+        url: "",
+        clipCount: 1,
+        minDuration: 0,
+        maxDuration: 0,
+        aiOptions: {
+          topic,
+          voice: voice || "es-mx-m",
+          background: background || "abstract",
+          style: style || "facts",
+        },
+      });
+
+      logAPI.info(`AI Video job ${id} creado`, topic.slice(0, 50));
+
+      return Response.json({
+        id: job.id,
+        status: job.status,
+        message: job.message,
+      });
+    }
+
+    // YouTube clip extraction (existing flow)
+    const { url, clipCount, minDuration, maxDuration } = body;
 
     if (!url || typeof url !== "string") {
       return Response.json({ error: "URL is required" }, { status: 400 });
     }
-
-    const id = crypto.randomUUID().slice(0, 8);
 
     const job = createJob({
       id,
@@ -54,11 +89,13 @@ export async function GET(request: Request) {
 
   return Response.json({
     id: job.id,
+    type: job.type,
     status: job.status,
     progress: job.progress,
     message: job.message,
     segments: job.segments,
     outputs: job.outputs,
+    script: job.script,
     error: job.error,
   });
 }

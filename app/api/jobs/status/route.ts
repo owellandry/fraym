@@ -33,6 +33,7 @@ export async function GET(request: Request) {
           message: updatedJob.message,
           segments: updatedJob.segments,
           outputs: updatedJob.outputs,
+          script: updatedJob.script,
           error: updatedJob.error,
         });
 

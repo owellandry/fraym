@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 export type JobStatus = "idle" | "downloading" | "analyzing" | "processing" | "done" | "error";
+export type JobMode = "clip" | "ai-video";
 
 export interface Segment {
   start: number;
@@ -17,6 +18,7 @@ export interface JobState {
   message?: string;
   segments: Segment[];
   outputs: string[];
+  script?: string;
   error?: string;
 }
 
@@ -35,6 +37,34 @@ export const DURATION_OPTIONS = [
   { label: "60s+", min: 60, max: 0 },
 ] as const;
 
+export const VOICE_OPTIONS = [
+  { key: "es-mx-m", label: "Jorge (Mexico)", flag: "🇲🇽" },
+  { key: "es-mx-f", label: "Dalia (Mexico)", flag: "🇲🇽" },
+  { key: "es-co-m", label: "Gonzalo (Colombia)", flag: "🇨🇴" },
+  { key: "es-co-f", label: "Salome (Colombia)", flag: "🇨🇴" },
+  { key: "es-ar-m", label: "Tomas (Argentina)", flag: "🇦🇷" },
+  { key: "es-ar-f", label: "Elena (Argentina)", flag: "🇦🇷" },
+  { key: "es-es-m", label: "Alvaro (España)", flag: "🇪🇸" },
+  { key: "en-us-m", label: "Guy (English)", flag: "🇺🇸" },
+  { key: "en-us-f", label: "Jenny (English)", flag: "🇺🇸" },
+] as const;
+
+export const BG_CATEGORIES = [
+  { key: "satisfying", label: "Satisfying" },
+  { key: "nature", label: "Naturaleza" },
+  { key: "city", label: "Ciudad" },
+  { key: "abstract", label: "Abstracto" },
+  { key: "food", label: "Cocina" },
+  { key: "space", label: "Espacio" },
+] as const;
+
+export const STYLE_OPTIONS = [
+  { key: "facts", label: "Datos curiosos" },
+  { key: "story", label: "Historia" },
+  { key: "motivation", label: "Motivacion" },
+  { key: "news", label: "Noticia" },
+] as const;
+
 const INITIAL_STATE: JobState = {
   status: "idle",
   progress: 0,
@@ -43,9 +73,16 @@ const INITIAL_STATE: JobState = {
 };
 
 export function useJob() {
+  const [mode, setMode] = useState<JobMode>("clip");
   const [url, setUrl] = useState("");
   const [clipCount, setClipCount] = useState(4);
   const [durationIdx, setDurationIdx] = useState(1);
+  // AI video options
+  const [topic, setTopic] = useState("");
+  const [voice, setVoice] = useState("es-mx-m");
+  const [background, setBackground] = useState("abstract");
+  const [style, setStyle] = useState("facts");
+
   const [job, setJob] = useState<JobState>(INITIAL_STATE);
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -57,12 +94,74 @@ export function useJob() {
     eventSourceRef.current = null;
     setJob(INITIAL_STATE);
     setUrl("");
+    setTopic("");
   }, []);
 
-  async function submit() {
-    if (!url.trim() || isProcessing) return;
+  function connectSSE(id: string) {
+    const sse = new EventSource(`/api/jobs/status?id=${id}`);
+    eventSourceRef.current = sse;
 
-    // Normalize: add https:// if missing
+    sse.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setJob({
+        status: data.status,
+        progress: data.progress,
+        message: data.message,
+        segments: data.segments || [],
+        outputs: data.outputs || [],
+        script: data.script,
+        error: data.error,
+      });
+
+      if (data.status === "done" || data.status === "error") {
+        sse.close();
+        eventSourceRef.current = null;
+      }
+    };
+
+    sse.onerror = () => {
+      sse.close();
+      eventSourceRef.current = null;
+    };
+  }
+
+  async function submit() {
+    if (isProcessing) return;
+
+    if (mode === "ai-video") {
+      if (!topic.trim()) return;
+
+      setJob({ status: "processing", progress: 5, segments: [], outputs: [] });
+
+      try {
+        const res = await fetch("/api/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "ai-video",
+            topic: topic.trim(),
+            voice,
+            background,
+            style,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Error al crear job");
+        }
+
+        const { id } = await res.json();
+        connectSSE(id);
+      } catch (err: any) {
+        setJob((p) => ({ ...p, status: "error", error: err.message || "Algo salio mal" }));
+      }
+      return;
+    }
+
+    // Clip mode
+    if (!url.trim()) return;
+
     let finalUrl = url.trim();
     if (!/^https?:\/\//i.test(finalUrl)) {
       finalUrl = `https://${finalUrl}`;
@@ -88,36 +187,9 @@ export function useJob() {
       }
 
       const { id } = await res.json();
-      const sse = new EventSource(`/api/jobs/status?id=${id}`);
-      eventSourceRef.current = sse;
-
-      sse.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setJob({
-          status: data.status,
-          progress: data.progress,
-          message: data.message,
-          segments: data.segments || [],
-          outputs: data.outputs || [],
-          error: data.error,
-        });
-
-        if (data.status === "done" || data.status === "error") {
-          sse.close();
-          eventSourceRef.current = null;
-        }
-      };
-
-      sse.onerror = () => {
-        sse.close();
-        eventSourceRef.current = null;
-      };
+      connectSSE(id);
     } catch (err: any) {
-      setJob((p) => ({
-        ...p,
-        status: "error",
-        error: err.message || "Algo salio mal",
-      }));
+      setJob((p) => ({ ...p, status: "error", error: err.message || "Algo salio mal" }));
     }
   }
 
@@ -126,9 +198,14 @@ export function useJob() {
   }, []);
 
   return {
+    mode, setMode,
     url, setUrl,
     clipCount, setClipCount,
     durationIdx, setDurationIdx,
+    topic, setTopic,
+    voice, setVoice,
+    background, setBackground,
+    style, setStyle,
     job, isProcessing, currentStep,
     submit, reset,
   };
