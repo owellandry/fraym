@@ -28,6 +28,20 @@ function shortUrl(url: string): string {
   return url.replace(/https?:\/\/(www\.)?/, "").slice(0, 35);
 }
 
+function getSegmentTitle(seg: JobState["segments"][number] | undefined, index: number): string {
+  const cleanTitle = (seg?.title || "")
+    .replace(/\[[^\]]+\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleanTitle && !/^short\s*#?\s*\d+$/i.test(cleanTitle)) return cleanTitle;
+
+  const cleanReason = (seg?.reason || "").replace(/\s+/g, " ").trim();
+  if (cleanReason) return cleanReason.slice(0, 60);
+
+  return `Clip ${index + 1}`;
+}
+
 function PreviewPlayer({ src }: { src: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
@@ -98,8 +112,15 @@ function PreviewPlayer({ src }: { src: string }) {
         src={src}
         autoPlay
         playsInline
+        disablePictureInPicture
+        disableRemotePlayback
+        controlsList="nodownload nofullscreen noplaybackrate noremoteplayback"
         onClick={togglePlay}
       />
+
+      <div className="preview-progress" aria-hidden="true">
+        <div className="preview-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
 
       {/* Center play/pause tap overlay */}
       <div className="preview-tap-zone" onClick={togglePlay}>
@@ -206,7 +227,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
               >
                 <video src={output} preload="metadata" />
                 <div className="card-body">
-                  <p className="card-title">{seg?.title || `Short #${i + 1}`}</p>
+                  <p className="card-title">{getSegmentTitle(seg, i)}</p>
                   <div className="card-meta">
                     <span className="card-time">
                       {seg ? `${formatTime(seg.start)} → ${formatTime(seg.end)}` : ""}
@@ -247,7 +268,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 <div className="rcard-info">
                   <div className="rcard-top">
                     <span className="rcard-badge">CLIP {i + 1}</span>
-                    <p className="rcard-title">{seg?.title || `Short #${i + 1}`}</p>
+                    <p className="rcard-title">{getSegmentTitle(seg, i)}</p>
                     <p className="rcard-reason">{seg?.reason || ""}</p>
                   </div>
                   <div className="rcard-bottom">
@@ -336,7 +357,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                   <span className="preview-follow">Seguir</span>
                 </div>
                 <p className="preview-desc">
-                  {previewSeg?.title || ""} #shorts #viral #fraym
+                  {getSegmentTitle(previewSeg || undefined, preview ?? 0)} #shorts #viral #fraym
                 </p>
                 <p className="preview-music"><Music size={11} color="rgba(255,255,255,0.8)" /> Sonido original — @fraym.clips</p>
               </div>
@@ -354,7 +375,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 <div className="preview-info-content">
                   <span className="preview-clip-badge">CLIP {(preview ?? 0) + 1}</span>
                   <h2 className="preview-clip-title">
-                    {previewSeg?.title || `Short #${(preview ?? 0) + 1}`}
+                    {getSegmentTitle(previewSeg || undefined, preview ?? 0)}
                   </h2>
                   <p className="preview-clip-reason">
                     {previewSeg?.reason || "Segmento detectado automaticamente"}

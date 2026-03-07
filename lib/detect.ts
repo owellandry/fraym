@@ -28,6 +28,21 @@ function buildTimedTranscript(chunks: TranscriptChunk[]): string {
   return blocks.join("\n");
 }
 
+function safeSegmentTitle(title: string | undefined, start: number, end: number, index: number): string {
+  const clean = (title || "")
+    .replace(/\[[^\]]+\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (clean && !/^short\s*#?\s*\d+$/i.test(clean)) {
+    return clean.slice(0, 60);
+  }
+
+  const startTs = formatTime(start);
+  const endTs = formatTime(end);
+  return `Clip ${index + 1} (${startTs}-${endTs})`;
+}
+
 async function detectWithAI(
   chunks: TranscriptChunk[],
   videoDuration: number,
@@ -142,12 +157,13 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
       );
       if (overlaps) continue;
 
+      const idx = segments.length;
       segments.push({
         start: Math.max(0, start),
         end: Math.min(videoDuration, end),
-        title: (seg.title || "").slice(0, 60),
+        title: safeSegmentTitle(seg.title, start, end, idx),
         reason: (seg.reason || "AI detected").slice(0, 100),
-        score: 100 - segments.length * 10,
+        score: 100 - idx * 10,
       });
 
       if (segments.length >= TARGET) break;

@@ -11,6 +11,15 @@ interface WordTiming {
 
 const TMP_DIR = path.join(process.cwd(), "tmp");
 
+function sanitizeCaptionText(text: string): string {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/\[[^\]]+\]/g, " ")
+    .replace(/pasted\s*text\s*#?\d+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ==========================================
 // VTT WORD-LEVEL PARSING
 // ==========================================
@@ -74,7 +83,7 @@ function parseVttWordTimings(vttContent: string): WordTiming[] {
     // Extract first word (before any <timestamp> tag)
     const firstWordMatch = timedLine.match(/^([^<]+)/);
     if (firstWordMatch && firstWordMatch[1]!.trim()) {
-      const cleanWord = firstWordMatch[1]!.replace(/&nbsp;/g, " ").replace(/\[.*?\]/g, "").trim();
+      const cleanWord = sanitizeCaptionText(firstWordMatch[1]!);
       if (cleanWord) {
         inlineWords.push({ word: cleanWord, start: cueStart });
       }
@@ -84,7 +93,7 @@ function parseVttWordTimings(vttContent: string): WordTiming[] {
     let wMatch;
     while ((wMatch = wordPattern.exec(timedLine))) {
       const wordStart = parseVttTimestamp(wMatch[1]!);
-      const cleanWord = wMatch[2]!.replace(/&nbsp;/g, " ").replace(/\[.*?\]/g, "").trim();
+      const cleanWord = sanitizeCaptionText(wMatch[2]!);
       if (cleanWord) {
         inlineWords.push({ word: cleanWord, start: wordStart });
       }
@@ -120,7 +129,7 @@ function parseVttWordTimings(vttContent: string): WordTiming[] {
 function estimateWordTimings(chunks: { text: string; start: number; end: number }[]): WordTiming[] {
   const words: WordTiming[] = [];
   for (const chunk of chunks) {
-    const chunkWords = chunk.text.split(/\s+/).filter(w => w.length > 0);
+    const chunkWords = sanitizeCaptionText(chunk.text).split(/\s+/).filter(w => w.length > 0);
     if (chunkWords.length === 0) continue;
     const totalChars = chunkWords.reduce((sum, w) => sum + w.length, 0);
     const chunkDuration = chunk.end - chunk.start;
@@ -206,7 +215,7 @@ function generateAssEvents(groups: DisplayGroup[], timeOffset: number = 0): stri
       for (let j = 0; j < group.words.length; j++) {
         const word = group.words[j]!.word.toUpperCase();
         if (j === w) {
-          text += `{\\c&H0000D4FF&\\fscx110\\fscy110}${word}{\\r}`;
+          text += `{\\c&H00FFFFFF&\\fscx110\\fscy110}${word}{\\r}`;
         } else {
           text += word;
         }
@@ -228,7 +237,7 @@ function generateHookTitle(title: string): string {
   const cleanTitle = title.replace(/[{}\\]/g, "");
   const start = formatAssTime(0);
   const end = formatAssTime(2.2);
-  return `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an8\\pos(540,400)\\fscx130\\fscy130\\fad(300,500)\\c&H0000D4FF&\\b1}${cleanTitle.toUpperCase()}\n`;
+  return `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an8\\pos(540,400)\\fscx130\\fscy130\\fad(300,500)\\c&H00FFFFFF&\\b1}${cleanTitle.toUpperCase()}\n`;
 }
 
 // ==========================================

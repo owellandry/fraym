@@ -42,6 +42,21 @@ const CONTRAST_MARKERS = [
   "the problem", "the thing is", "in reality", "plot twist",
 ];
 
+function sanitizeTitle(raw: string): string {
+  return raw
+    .replace(/\[[^\]]+\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function fallbackSegmentTitle(start: number, end: number, index: number): string {
+  const startM = Math.floor(start / 60);
+  const startS = Math.floor(start % 60).toString().padStart(2, "0");
+  const endM = Math.floor(end / 60);
+  const endS = Math.floor(end % 60).toString().padStart(2, "0");
+  return `Clip ${index + 1} (${startM}:${startS}-${endM}:${endS})`;
+}
+
 export function scoreTranscriptWindow(
   chunks: TranscriptChunk[],
   windowStart: number,
@@ -105,7 +120,8 @@ export function scoreTranscriptWindow(
 }
 
 export function buildTitle(text: string): string {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 5);
+  const cleaned = sanitizeTitle(text);
+  const sentences = cleaned.split(/[.!?]+/).filter(s => s.trim().length > 5);
 
   // Prefer sentences with hooks or intensity words
   const interesting = sentences.find(s => {
@@ -122,7 +138,7 @@ export function buildTitle(text: string): string {
     if (trimmed.length <= 50) return trimmed;
     return trimmed.slice(0, 47) + "...";
   }
-  const words = text.split(/\s+/).slice(0, 8).join(" ");
+  const words = cleaned.split(/\s+/).slice(0, 8).join(" ");
   return words.length > 50 ? words.slice(0, 47) + "..." : words;
 }
 
@@ -143,7 +159,7 @@ export function generateEvenSegments(
 
     const windowChunks = chunks.filter(c => c.start >= start && c.end <= end);
     const windowText = windowChunks.map(c => c.text).join(" ");
-    const title = windowText ? buildTitle(windowText) : `Short #${i + 1}`;
+    const title = windowText ? buildTitle(windowText) : fallbackSegmentTitle(start, end, i);
     const reason = windowText
       ? "Segmento con transcripcion disponible"
       : "Segmento auto-detectado";

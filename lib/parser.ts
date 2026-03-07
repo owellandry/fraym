@@ -19,10 +19,12 @@ export async function parseSubtitles(subtitlePath: string): Promise<TranscriptCh
         const clean = line
           .replace(/<[^>]+>/g, "")
           .replace(/\{[^}]+\}/g, "")
+          .replace(/\[[^\]]+\]/g, " ")
           .replace(/&nbsp;/g, " ")
           .replace(/&amp;/g, "&")
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">")
+          .replace(/\s+/g, " ")
           .trim();
         if (clean && !/^\d+$/.test(clean)) textLines.push(clean);
       }
