@@ -74,7 +74,7 @@ export function getYtdlpAuthArgs(): string[] {
   const userAgent = process.env.YTDLP_USER_AGENT?.trim();
   const extractorArgs = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
 
-  if (cookiesFile) {
+  if (cookiesFile && fsSync.existsSync(cookiesFile)) {
     args.push("--cookies", cookiesFile);
   } else if (cookiesFromBrowser) {
     args.push("--cookies-from-browser", cookiesFromBrowser);
