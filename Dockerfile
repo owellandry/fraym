@@ -15,10 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
-# yt-dlp global config — js runtime + remote challenge solver
+# yt-dlp global config — use android client (no PO token needed for public videos)
 RUN mkdir -p /root/.config/yt-dlp && \
-    echo '--js-runtimes node' > /root/.config/yt-dlp/config && \
-    echo '--remote-components ejs:github' >> /root/.config/yt-dlp/config
+    echo '--extractor-args youtube:player_client=android,web' > /root/.config/yt-dlp/config
 
 WORKDIR /app
 

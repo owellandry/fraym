@@ -70,18 +70,13 @@ export function getYtdlpPath() { return YTDLP; }
 export function getYtdlpAuthArgs(): string[] {
   const args: string[] = [];
   const cookiesFile = process.env.YTDLP_COOKIES_FILE?.trim();
-  const cookiesFromBrowser = process.env.YTDLP_COOKIES_FROM_BROWSER?.trim();
   const userAgent = process.env.YTDLP_USER_AGENT?.trim();
-  const extractorArgs = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
 
   if (cookiesFile && fsSync.existsSync(cookiesFile)) {
     args.push("--cookies", cookiesFile);
-  } else if (cookiesFromBrowser) {
-    args.push("--cookies-from-browser", cookiesFromBrowser);
   }
 
   if (userAgent) args.push("--user-agent", userAgent);
-  if (extractorArgs) args.push("--extractor-args", extractorArgs);
 
   return args;
 }

@@ -8,20 +8,9 @@ services:
     environment:
       - PORT=9977
       - NODE_ENV=production
-      - BGUTIL_BASE_URL=http://bgutil:4416
-      - YTDLP_EXTRACTOR_ARGS=youtubepot-bgutilhttp:base_url=http://bgutil:4416
-      - YTDLP_COOKIES_FILE=/app/cookies.txt
     volumes:
       - fraym_tmp:/app/tmp
       - fraym_outputs:/app/public/outputs
-      - ./cookies.txt:/app/cookies.txt:ro
-    depends_on:
-      - bgutil
-    restart: unless-stopped
-
-  bgutil:
-    image: brainicism/bgutil-ytdlp-pot-provider:latest
-    init: true
     restart: unless-stopped
 
 volumes:
