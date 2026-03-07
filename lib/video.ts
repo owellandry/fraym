@@ -67,6 +67,25 @@ const FFMPEG_DIR = path.dirname(FFMPEG);
 
 export function getYtdlpPath() { return YTDLP; }
 
+function getYtdlpAuthArgs(): string[] {
+  const args: string[] = [];
+  const cookiesFile = process.env.YTDLP_COOKIES_FILE?.trim();
+  const cookiesFromBrowser = process.env.YTDLP_COOKIES_FROM_BROWSER?.trim();
+  const userAgent = process.env.YTDLP_USER_AGENT?.trim();
+  const extractorArgs = process.env.YTDLP_EXTRACTOR_ARGS?.trim();
+
+  if (cookiesFile) {
+    args.push("--cookies", cookiesFile);
+  } else if (cookiesFromBrowser) {
+    args.push("--cookies-from-browser", cookiesFromBrowser);
+  }
+
+  if (userAgent) args.push("--user-agent", userAgent);
+  if (extractorArgs) args.push("--extractor-args", extractorArgs);
+
+  return args;
+}
+
 export async function ensureDirs() {
   await fs.mkdir(TMP_DIR, { recursive: true });
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
@@ -75,9 +94,11 @@ export async function ensureDirs() {
 export async function downloadVideo(url: string, jobId: string): Promise<string> {
   await ensureDirs();
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
+  const authArgs = getYtdlpAuthArgs();
 
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP, [
+      ...authArgs,
       "--ffmpeg-location", FFMPEG_DIR,
       "-f", "bestvideo[height<=1080]+bestaudio/best",
       "--merge-output-format", "mp4",
@@ -106,7 +127,11 @@ export async function downloadVideo(url: string, jobId: string): Promise<string>
           reject(new Error(`yt-dlp finished but merged file not found. Files: ${partials.join(", ")}\nstderr: ${stderr}`));
         }
       } else {
-        reject(new Error(`yt-dlp failed (code ${code}): ${stderr}`));
+        const blockedByYoutube = /Sign in to confirm you(?:'|’)re not a bot/i.test(stderr);
+        const authHint = blockedByYoutube
+          ? "\nYouTube blocked anonymous requests. Set YTDLP_COOKIES_FILE (recommended in Docker) or YTDLP_COOKIES_FROM_BROWSER."
+          : "";
+        reject(new Error(`yt-dlp failed (code ${code}): ${stderr}${authHint}`));
       }
     });
     proc.on("error", (err) => reject(new Error(`yt-dlp not found: ${err.message}`)));
@@ -147,9 +172,11 @@ export async function getVideoDuration(videoPath: string): Promise<number> {
 export async function extractSubtitles(videoPath: string, jobId: string): Promise<string> {
   await ensureDirs();
   const subtitlePath = path.join(TMP_DIR, `${jobId}.srt`);
+  const authArgs = getYtdlpAuthArgs();
 
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP, [
+      ...authArgs,
       "--write-auto-sub",
       "--sub-lang", "en,es",
       "--sub-format", "srt",
