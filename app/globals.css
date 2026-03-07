@@ -903,6 +903,10 @@ input { font-family: inherit; }
   gap: 2px;
   color: #fff;
 }
+.preview-actions svg {
+  stroke: #fff !important;
+  color: #fff !important;
+}
 .preview-action-icon {
   font-size: 24px;
   color: #fff;
@@ -963,6 +967,14 @@ input { font-family: inherit; }
 .preview-music {
   color: rgba(255,255,255,0.8);
   font-size: 11px;
+}
+
+/* Force all SVG icons in preview to white */
+.preview-phone svg,
+.preview-bottom-info svg,
+.preview-controls svg {
+  stroke: #fff !important;
+  color: #fff !important;
 }
 
 /* Custom video controls */

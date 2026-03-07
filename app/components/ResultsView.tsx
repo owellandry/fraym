@@ -45,15 +45,15 @@ function getSegmentTitle(seg: JobState["segments"][number] | undefined, index: n
 function PreviewPlayer({ src }: { src: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
   const [playing, setPlaying] = useState(true);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const onTime = () => { if (!dragging) setCurrent(v.currentTime); };
+    const onTime = () => { if (!draggingRef.current) setCurrent(v.currentTime); };
     const onMeta = () => setDuration(v.duration);
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
@@ -70,7 +70,7 @@ function PreviewPlayer({ src }: { src: string }) {
       v.removeEventListener("pause", onPause);
       v.removeEventListener("ended", onEnd);
     };
-  }, [dragging]);
+  }, []);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -79,28 +79,29 @@ function PreviewPlayer({ src }: { src: string }) {
     else v.pause();
   }, []);
 
-  const seek = useCallback((e: React.MouseEvent | MouseEvent) => {
+  const seekTo = useCallback((e: React.MouseEvent | MouseEvent) => {
     const bar = progressRef.current;
     const v = videoRef.current;
-    if (!bar || !v || !duration) return;
+    if (!bar || !v || !v.duration) return;
     const rect = bar.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    v.currentTime = pct * duration;
-    setCurrent(pct * duration);
-  }, [duration]);
+    const time = pct * v.duration;
+    v.currentTime = time;
+    setCurrent(time);
+  }, []);
 
   const onPointerDown = useCallback((e: React.MouseEvent) => {
-    setDragging(true);
-    seek(e);
-    const onMove = (ev: MouseEvent) => seek(ev);
+    draggingRef.current = true;
+    seekTo(e);
+    const onMove = (ev: MouseEvent) => seekTo(ev);
     const onUp = () => {
-      setDragging(false);
+      draggingRef.current = false;
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [seek]);
+  }, [seekTo]);
 
   const pct = duration > 0 ? (current / duration) * 100 : 0;
 
