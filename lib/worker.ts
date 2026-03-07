@@ -113,11 +113,11 @@ async function processJob(job: Job): Promise<void> {
   sceneProgress.stop();
 
   jlog.info("Cortes ajustados a scene cuts");
-  updateJob(id, { progress: 57, message: "Detectando encuadre (YOLO)..." });
+  updateJob(id, { progress: 57, message: "Detectando encuadre..." });
 
   const ffmpegPath = getFfmpegPath();
 
-  const yoloProgress = smoothProgress(id, 57, 64, 10000, "Detectando encuadre (YOLO)...");
+  const yoloProgress = smoothProgress(id, 57, 64, 25000, "Detectando encuadre...");
   const cropRegions = await Promise.all(
     segments.map((seg, i) =>
       detectCropRegion(videoPath, seg.start, seg.end - seg.start, id, i, ffmpegPath)
@@ -125,7 +125,7 @@ async function processJob(job: Job): Promise<void> {
   );
   yoloProgress.stop();
 
-  jlog.info("Encuadre detectado por YOLO");
+  jlog.info("Encuadre detectado");
   updateJob(id, { progress: 65, message: "Generando subtitulos..." });
 
   const vttPath = subtitlePath && subtitlePath.endsWith(".vtt") ? subtitlePath : undefined;

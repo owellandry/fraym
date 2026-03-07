@@ -141,7 +141,7 @@ export default function HomeView({
 
       <footer className="feature-bar" style={{ animation: mounted ? "fadeIn 0.6s ease 0.3s both" : "none" }}>
         {[
-          "Face Tracking YOLO",
+          "Face Tracking",
           "Subtitulos sincronizados",
           "IA detecta momentos virales",
           "Espejo automatico",

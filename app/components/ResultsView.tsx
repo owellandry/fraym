@@ -304,7 +304,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
 
       <footer className="feature-bar desktop-only">
         {[
-          "Face Tracking YOLO",
+          "Face Tracking",
           "Subtitulos sincronizados",
           "IA detecta momentos virales",
           "Espejo automatico",

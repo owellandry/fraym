@@ -12,9 +12,14 @@ export interface TranscriptChunk {
   end: number;
 }
 
+export interface CropKeyframe {
+  time: number;   // seconds relative to segment start
+  x: number;      // crop X position as ratio [0-1] of available range
+}
+
 export interface CropRegion {
-  x: number;
-  strategy: "face" | "person" | "saliency" | "center" | "letterbox";
+  strategy: "face" | "person" | "center";
+  keyframes: CropKeyframe[];  // dynamic crop positions over time
 }
 
 export interface DetectOptions {

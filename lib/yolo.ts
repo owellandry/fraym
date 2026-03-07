@@ -9,14 +9,17 @@ const MODEL_INPUT_SIZE = 640;
 let faceSession: ort.InferenceSession | null = null;
 let personSession: ort.InferenceSession | null = null;
 
-interface BoundingBox {
+export interface BoundingBox {
   x1: number; y1: number;
   x2: number; y2: number;
   confidence: number;
   label: "face" | "person";
 }
 
-export type { BoundingBox };
+export interface FrameDetection {
+  faces: BoundingBox[];
+  persons: BoundingBox[];
+}
 
 async function loadFaceModel(): Promise<ort.InferenceSession> {
   if (faceSession) return faceSession;
@@ -144,16 +147,19 @@ function iou(a: BoundingBox, b: BoundingBox): number {
   return inter / (areaA + areaB - inter + 1e-6);
 }
 
-export async function detectInFrame(framePath: string): Promise<BoundingBox[]> {
+// Run BOTH face and person detection on a single frame
+export async function detectInFrame(framePath: string): Promise<FrameDetection> {
   const { tensor, origWidth, origHeight } = await prepareInput(framePath);
+
+  let faces: BoundingBox[] = [];
+  let persons: BoundingBox[] = [];
 
   try {
     const faceModel = await loadFaceModel();
     const inputName = faceModel.inputNames[0]!;
     const results = await faceModel.run({ [inputName]: tensor });
     const outputName = faceModel.outputNames[0]!;
-    const faces = parseYoloOutput(results[outputName]!, origWidth, origHeight, "face", 0.4);
-    if (faces.length > 0) return faces;
+    faces = parseYoloOutput(results[outputName]!, origWidth, origHeight, "face", 0.4);
   } catch (err) {
     logYolo.warn("Face detection error", String(err));
   }
@@ -163,9 +169,10 @@ export async function detectInFrame(framePath: string): Promise<BoundingBox[]> {
     const inputName = personModel.inputNames[0]!;
     const results = await personModel.run({ [inputName]: tensor });
     const outputName = personModel.outputNames[0]!;
-    return parseYoloOutput(results[outputName]!, origWidth, origHeight, "person", 0.35);
+    persons = parseYoloOutput(results[outputName]!, origWidth, origHeight, "person", 0.35);
   } catch (err) {
     logYolo.warn("Person detection error", String(err));
-    return [];
   }
+
+  return { faces, persons };
 }
