@@ -843,7 +843,7 @@ input { font-family: inherit; }
 /* Subtitles */
 .preview-subs {
   position: absolute;
-  bottom: 170px;
+  bottom: 200px;
   left: 50%;
   transform: translateX(-50%);
   pointer-events: none;
@@ -862,7 +862,7 @@ input { font-family: inherit; }
 .preview-actions {
   position: absolute;
   right: 10px;
-  bottom: 180px;
+  bottom: 200px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -887,7 +887,7 @@ input { font-family: inherit; }
 /* Bottom user info */
 .preview-bottom-info {
   position: absolute;
-  bottom: 14px;
+  bottom: 46px;
   left: 14px;
   right: 54px;
   display: flex;
@@ -934,20 +934,89 @@ input { font-family: inherit; }
   font-size: 11px;
 }
 
-/* Progress bar */
-.preview-progress {
+/* Custom video controls */
+.preview-tap-zone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+}
+.preview-big-play {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: scaleIn 0.2s ease;
+}
+.preview-controls {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+  z-index: 3;
 }
-.preview-progress-fill {
-  width: 65%;
-  height: 100%;
+.preview-play-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+}
+.preview-time {
+  color: rgba(255,255,255,0.9);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 32px;
+}
+.preview-seekbar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+}
+.preview-seekbar:hover { height: 6px; }
+.preview-seekbar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
   background: #fff;
+  border-radius: 2px;
+  pointer-events: none;
 }
+.preview-seekbar-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.preview-seekbar:hover .preview-seekbar-thumb { opacity: 1; }
 
 /* Desktop info panel */
 .preview-info {

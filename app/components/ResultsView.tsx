@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Heart, MessageCircle, Share2, Bookmark,
-  Music, Download, X, Play, Check,
-  ArrowLeft,
+  Music, Download, X, Play, Pause, Check,
 } from "lucide-react";
 import type { JobState } from "../hooks/useJob";
 
@@ -27,6 +26,111 @@ function totalDuration(job: JobState): string {
 
 function shortUrl(url: string): string {
   return url.replace(/https?:\/\/(www\.)?/, "").slice(0, 35);
+}
+
+function PreviewPlayer({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const [playing, setPlaying] = useState(true);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onTime = () => { if (!dragging) setCurrent(v.currentTime); };
+    const onMeta = () => setDuration(v.duration);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    const onEnd = () => setPlaying(false);
+    v.addEventListener("timeupdate", onTime);
+    v.addEventListener("loadedmetadata", onMeta);
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("ended", onEnd);
+    return () => {
+      v.removeEventListener("timeupdate", onTime);
+      v.removeEventListener("loadedmetadata", onMeta);
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("ended", onEnd);
+    };
+  }, [dragging]);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play();
+    else v.pause();
+  }, []);
+
+  const seek = useCallback((e: React.MouseEvent | MouseEvent) => {
+    const bar = progressRef.current;
+    const v = videoRef.current;
+    if (!bar || !v || !duration) return;
+    const rect = bar.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    v.currentTime = pct * duration;
+    setCurrent(pct * duration);
+  }, [duration]);
+
+  const onPointerDown = useCallback((e: React.MouseEvent) => {
+    setDragging(true);
+    seek(e);
+    const onMove = (ev: MouseEvent) => seek(ev);
+    const onUp = () => {
+      setDragging(false);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [seek]);
+
+  const pct = duration > 0 ? (current / duration) * 100 : 0;
+
+  return (
+    <>
+      <video
+        ref={videoRef}
+        className="preview-video"
+        src={src}
+        autoPlay
+        playsInline
+        onClick={togglePlay}
+      />
+
+      {/* Center play/pause tap overlay */}
+      <div className="preview-tap-zone" onClick={togglePlay}>
+        {!playing && (
+          <div className="preview-big-play">
+            <Play size={40} color="#fff" fill="#fff" />
+          </div>
+        )}
+      </div>
+
+      {/* Custom progress bar */}
+      <div className="preview-controls">
+        <button className="preview-play-btn" onClick={togglePlay}>
+          {playing
+            ? <Pause size={16} color="#fff" fill="#fff" />
+            : <Play size={16} color="#fff" fill="#fff" />
+          }
+        </button>
+        <span className="preview-time">{formatTime(current)}</span>
+        <div
+          ref={progressRef}
+          className="preview-seekbar"
+          onMouseDown={onPointerDown}
+        >
+          <div className="preview-seekbar-fill" style={{ width: `${pct}%` }} />
+          <div className="preview-seekbar-thumb" style={{ left: `${pct}%` }} />
+        </div>
+        <span className="preview-time">{formatTime(duration)}</span>
+      </div>
+    </>
+  );
 }
 
 export default function ResultsView({ job, url, onReset }: Props) {
@@ -137,7 +241,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 <div className="rcard-thumb">
                   <video src={output} preload="metadata" />
                   <button className="rcard-play" onClick={(e) => e.stopPropagation()}>
-                    <Play size={16} fill="#fff" />
+                    <Play size={16} color="#fff" fill="#fff" />
                   </button>
                 </div>
                 <div className="rcard-info">
@@ -197,15 +301,9 @@ export default function ResultsView({ job, url, onReset }: Props) {
           style={{ animation: "fadeIn 0.25s ease" }}
         >
           <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
-            {/* Phone frame with TikTok-style UI */}
+            {/* Phone frame */}
             <div className="preview-phone">
-              <video
-                className="preview-video"
-                src={previewOutput}
-                controls
-                autoPlay
-                playsInline
-              />
+              <PreviewPlayer src={previewOutput} />
               <div className="preview-gradient" />
 
               {/* Subtitles */}
@@ -218,19 +316,19 @@ export default function ResultsView({ job, url, onReset }: Props) {
               {/* TikTok action buttons */}
               <div className="preview-actions">
                 <div className="preview-action-col">
-                  <Heart size={26} />
+                  <Heart size={26} color="#fff" />
                   <span className="preview-action-count">—</span>
                 </div>
                 <div className="preview-action-col">
-                  <MessageCircle size={24} />
+                  <MessageCircle size={24} color="#fff" />
                   <span className="preview-action-count">—</span>
                 </div>
                 <div className="preview-action-col">
-                  <Share2 size={22} />
+                  <Share2 size={22} color="#fff" />
                   <span className="preview-action-count">—</span>
                 </div>
                 <div className="preview-action-col">
-                  <Bookmark size={22} />
+                  <Bookmark size={22} color="#fff" />
                   <span className="preview-action-count">—</span>
                 </div>
               </div>
@@ -247,12 +345,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 <p className="preview-desc">
                   {previewSeg?.title || ""} #shorts #viral #fraym
                 </p>
-                <p className="preview-music"><Music size={11} /> Sonido original — @fraym.clips</p>
-              </div>
-
-              {/* Progress bar */}
-              <div className="preview-progress">
-                <div className="preview-progress-fill" />
+                <p className="preview-music"><Music size={11} color="rgba(255,255,255,0.8)" /> Sonido original — @fraym.clips</p>
               </div>
             </div>
 
@@ -262,7 +355,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 <div className="preview-info-header">
                   <span className="preview-label">Vista previa</span>
                   <button className="preview-close" onClick={() => setPreview(null)}>
-                    <X size={18} />
+                    <X size={18} color="#fff" />
                   </button>
                 </div>
                 <div className="preview-info-content">
@@ -302,7 +395,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
             {/* Mobile close + download */}
             <div className="preview-mobile-bar mobile-only">
               <button className="preview-close-mobile" onClick={() => setPreview(null)}>
-                <X size={16} />
+                <X size={16} color="#fff" />
               </button>
               <span className="preview-mobile-label">CLIP {(preview ?? 0) + 1} · {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : ""} · 720p</span>
               <a href={previewOutput} download className="preview-dl-mobile"><Download size={14} /> Descargar</a>
