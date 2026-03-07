@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { JobState } from "../hooks/useJob";
 
 interface Props {
@@ -24,6 +25,8 @@ function shortUrl(url: string): string {
 }
 
 export default function ResultsView({ job, url, onReset }: Props) {
+  const [preview, setPreview] = useState<number | null>(null);
+
   function downloadAll(e: React.MouseEvent) {
     e.preventDefault();
     job.outputs.forEach((o) => {
@@ -33,6 +36,9 @@ export default function ResultsView({ job, url, onReset }: Props) {
       a.click();
     });
   }
+
+  const previewSeg = preview !== null ? job.segments[preview] : null;
+  const previewOutput = preview !== null ? job.outputs[preview] : null;
 
   return (
     <div className="page" style={{ animation: "fadeIn 0.4s ease" }}>
@@ -86,16 +92,22 @@ export default function ResultsView({ job, url, onReset }: Props) {
               <div
                 key={i}
                 className="card"
-                style={{ animation: `scaleIn 0.4s ease ${i * 0.08}s both` }}
+                style={{ animation: `scaleIn 0.4s ease ${i * 0.08}s both`, cursor: "pointer" }}
+                onClick={() => setPreview(i)}
               >
-                <video src={output} controls preload="metadata" />
+                <video src={output} preload="metadata" />
                 <div className="card-body">
                   <p className="card-title">{seg?.title || `Short #${i + 1}`}</p>
                   <div className="card-meta">
                     <span className="card-time">
                       {seg ? `${formatTime(seg.start)} → ${formatTime(seg.end)}` : ""}
                     </span>
-                    <a href={output} download className="card-dl">
+                    <a
+                      href={output}
+                      download
+                      className="card-dl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       Descargar ↓
                     </a>
                   </div>
@@ -114,20 +126,12 @@ export default function ResultsView({ job, url, onReset }: Props) {
               <div
                 key={i}
                 className="rcard"
-                style={{ animation: `fadeInUp 0.4s ease ${i * 0.08}s both` }}
+                style={{ animation: `fadeInUp 0.4s ease ${i * 0.08}s both`, cursor: "pointer" }}
+                onClick={() => setPreview(i)}
               >
                 <div className="rcard-thumb">
                   <video src={output} preload="metadata" />
-                  <button
-                    className="rcard-play"
-                    onClick={(e) => {
-                      const video = e.currentTarget.parentElement?.querySelector("video");
-                      if (video) {
-                        if (video.paused) video.play();
-                        else video.pause();
-                      }
-                    }}
-                  >
+                  <button className="rcard-play" onClick={(e) => e.stopPropagation()}>
                     ▶
                   </button>
                 </div>
@@ -139,7 +143,13 @@ export default function ResultsView({ job, url, onReset }: Props) {
                   </div>
                   <div className="rcard-bottom">
                     <span className="rcard-meta">{duration} · 720p</span>
-                    <a href={output} download className="rcard-dl" title="Descargar">
+                    <a
+                      href={output}
+                      download
+                      className="rcard-dl"
+                      title="Descargar"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       ↓
                     </a>
                   </div>
@@ -173,6 +183,124 @@ export default function ResultsView({ job, url, onReset }: Props) {
           </div>
         ))}
       </footer>
+
+      {/* Preview Modal */}
+      {preview !== null && previewOutput && (
+        <div
+          className="preview-overlay"
+          onClick={() => setPreview(null)}
+          style={{ animation: "fadeIn 0.25s ease" }}
+        >
+          <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Phone frame with TikTok-style UI */}
+            <div className="preview-phone">
+              <video
+                className="preview-video"
+                src={previewOutput}
+                controls
+                autoPlay
+                playsInline
+              />
+              <div className="preview-gradient" />
+
+              {/* Subtitles area */}
+              <div className="preview-subs">
+                <span className="preview-subs-text">
+                  {previewSeg?.title || `Short #${(preview ?? 0) + 1}`}
+                </span>
+              </div>
+
+              {/* TikTok action buttons */}
+              <div className="preview-actions">
+                <div className="preview-action-col">
+                  <span className="preview-action-icon">♥</span>
+                  <span className="preview-action-count">—</span>
+                </div>
+                <div className="preview-action-col">
+                  <span className="preview-action-icon">💬</span>
+                  <span className="preview-action-count">—</span>
+                </div>
+                <div className="preview-action-col">
+                  <span className="preview-action-icon">↗</span>
+                  <span className="preview-action-count">—</span>
+                </div>
+                <div className="preview-action-col">
+                  <span className="preview-action-icon">⚑</span>
+                  <span className="preview-action-count">—</span>
+                </div>
+              </div>
+
+              {/* Bottom user info */}
+              <div className="preview-bottom-info">
+                <div className="preview-user-row">
+                  <span className="preview-avatar">
+                    <span style={{ fontFamily: "var(--font-display)", fontStyle: "italic" }}>f</span>
+                  </span>
+                  <span className="preview-username">@fraym.clips</span>
+                  <span className="preview-follow">Seguir</span>
+                </div>
+                <p className="preview-desc">
+                  {previewSeg?.title || ""} #shorts #viral #fraym
+                </p>
+                <p className="preview-music">♫ Sonido original — @fraym.clips</p>
+              </div>
+
+              {/* Progress bar */}
+              <div className="preview-progress">
+                <div className="preview-progress-fill" />
+              </div>
+            </div>
+
+            {/* Info panel (desktop only) */}
+            <div className="preview-info desktop-only">
+              <div className="preview-info-top">
+                <div className="preview-info-header">
+                  <span className="preview-label">Vista previa</span>
+                  <button className="preview-close" onClick={() => setPreview(null)}>✕</button>
+                </div>
+                <div className="preview-info-content">
+                  <span className="preview-clip-badge">CLIP {(preview ?? 0) + 1}</span>
+                  <h2 className="preview-clip-title">
+                    {previewSeg?.title || `Short #${(preview ?? 0) + 1}`}
+                  </h2>
+                  <p className="preview-clip-reason">
+                    {previewSeg?.reason || "Segmento detectado automáticamente"}
+                  </p>
+                  <div className="preview-divider" />
+                  <div className="preview-meta-grid">
+                    <div className="preview-meta-row">
+                      <span className="preview-meta-label">Duración</span>
+                      <span className="preview-meta-value">
+                        {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : "—"}
+                      </span>
+                    </div>
+                    <div className="preview-meta-row">
+                      <span className="preview-meta-label">Timestamp</span>
+                      <span className="preview-meta-value">
+                        {previewSeg ? `${formatTime(previewSeg.start)} → ${formatTime(previewSeg.end)}` : "—"}
+                      </span>
+                    </div>
+                    <div className="preview-meta-row">
+                      <span className="preview-meta-label">Resolución</span>
+                      <span className="preview-meta-value">1080×1920 · 720p</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <a href={previewOutput} download className="preview-dl-btn">
+                <span>↓</span> Descargar clip
+              </a>
+            </div>
+
+            {/* Mobile close + download */}
+            <div className="preview-mobile-bar mobile-only">
+              <button className="preview-close-mobile" onClick={() => setPreview(null)}>✕</button>
+              <span className="preview-mobile-label">CLIP {(preview ?? 0) + 1} · {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : ""} · 720p</span>
+              <a href={previewOutput} download className="preview-dl-mobile">↓ Descargar</a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
