@@ -4,7 +4,14 @@
 
 set -e
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Resolve symlinks
+SOURCE="$0"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+REPO_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
 cd "$REPO_DIR"
 
 R='\033[0;31m'  G='\033[0;32m'  C='\033[0;36m'
