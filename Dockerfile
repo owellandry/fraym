@@ -22,6 +22,7 @@ COPY lib/ ./lib/
 COPY models/ ./models/
 COPY public/ ./public/
 COPY vite.config.ts tsconfig.json ./
+COPY scripts/ ./scripts/
 
 RUN mkdir -p tmp public/outputs
 

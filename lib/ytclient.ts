@@ -2,14 +2,31 @@
 import { Innertube } from "youtubei.js";
 import path from "path";
 import fs from "fs/promises";
+import { loadCredentials, saveCredentials } from "./ytauth";
 
-const CACHE_DIR = path.join(process.cwd(), "tmp", ".ytcache");
 let _yt: Innertube | null = null;
 
 export async function getYT(): Promise<Innertube> {
   if (_yt) return _yt;
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-  _yt = await Innertube.create();
+
+  await fs.mkdir(path.join(process.cwd(), "tmp"), { recursive: true });
+
+  const yt = await Innertube.create();
+
+  // Load stored OAuth credentials if available
+  const credentials = await loadCredentials();
+  if (credentials) {
+    yt.session.on("update-credentials", async ({ credentials: newCreds }: any) => {
+      await saveCredentials(newCreds);
+      console.log("[ShortsAI] YouTube credentials refreshed");
+    });
+    await yt.session.oauth.init(credentials as any);
+    console.log("[ShortsAI] YouTube: authenticated with OAuth2");
+  } else {
+    console.log("[ShortsAI] YouTube: anonymous session (run 'bun run setup:yt' to authenticate if downloads fail)");
+  }
+
+  _yt = yt;
   return _yt;
 }
 

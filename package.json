@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "openvite dev",
     "build": "openvite build",
-    "start": "openvite start"
+    "start": "openvite start",
+    "setup:yt": "bun scripts/setup-yt.ts"
   },
   "dependencies": {
     "fluent-ffmpeg": "^2.1.3",
