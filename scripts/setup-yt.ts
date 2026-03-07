@@ -28,7 +28,7 @@ yt.session.on("auth-error", (err: any) => {
   process.exit(1);
 });
 
-await yt.session.oauth.init({} as any);
+await yt.session.oauth.init();
 
 // Wait for auth
 while (!done) {
