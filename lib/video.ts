@@ -1,64 +1,13 @@
-import { spawn, execSync } from "child_process";
+import { spawn } from "child_process";
 import path from "path";
 import fs from "fs/promises";
-import * as fsSync from "fs";
-import os from "os";
-import { extractVideoId, getVideoInfo, downloadVideo as ytDownload, downloadCaptionFile } from "./ytclient";
+import { TMP_DIR, OUTPUT_DIR, FFMPEG, FFPROBE, ensureDirs } from "./config";
+import { extractVideoId, getVideoInfo, downloadVideo as ytDownload, downloadCaptionFile } from "./youtube";
+import type { Segment } from "./types";
 
-const TMP_DIR = path.join(process.cwd(), "tmp");
-const OUTPUT_DIR = path.join(process.cwd(), "public", "outputs");
-
-// Resolve binary paths for Windows (winget installs to non-standard locations)
-function findBinary(name: string): string {
-  if (os.platform() !== "win32") return name;
-
-  const home = os.homedir();
-  const wingetPkgs = path.join(home, "AppData", "Local", "Microsoft", "WinGet", "Packages");
-  const candidates: string[] = [];
-
-  const ffmpegPkgDirs = [
-    "yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
-    "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
-  ];
-  for (const pkg of ffmpegPkgDirs) {
-    const pkgPath = path.join(wingetPkgs, pkg);
-    try {
-      for (const entry of fsSync.readdirSync(pkgPath)) {
-        candidates.push(path.join(pkgPath, entry, "bin", `${name}.exe`));
-      }
-    } catch {}
-  }
-
-  candidates.push(
-    path.join(home, "AppData", "Local", "Microsoft", "WinGet", "Links", `${name}.exe`),
-  );
-
-  for (const c of candidates) {
-    try {
-      fsSync.accessSync(c);
-      console.log(`[ShortsAI] Found ${name} at: ${c}`);
-      return c;
-    } catch {}
-  }
-
-  try {
-    const result = execSync(`where ${name}`, { encoding: "utf-8" }).trim().split("\n")[0]!.trim();
-    if (result) return result;
-  } catch {}
-
-  return name;
-}
-
-const FFMPEG = findBinary("ffmpeg");
-const FFPROBE = findBinary("ffprobe");
-
+export { ensureDirs };
 export function getFfmpegPath() { return FFMPEG; }
 export function getFfprobePath() { return FFPROBE; }
-
-export async function ensureDirs() {
-  await fs.mkdir(TMP_DIR, { recursive: true });
-  await fs.mkdir(OUTPUT_DIR, { recursive: true });
-}
 
 export async function downloadVideo(url: string, jobId: string): Promise<string> {
   await ensureDirs();
@@ -69,7 +18,6 @@ export async function downloadVideo(url: string, jobId: string): Promise<string>
   const info = await getVideoInfo(videoId);
   console.log(`[fraym] Downloading: ${info.title} [${info.bestQuality}]`);
 
-  // dlsrv returns combined mp4 (video+audio), no merge needed
   await ytDownload(videoId, outputPath, "720");
 
   console.log(`[fraym] Download complete: ${outputPath}`);
@@ -82,7 +30,6 @@ export async function downloadSubtitles(url: string, jobId: string): Promise<str
     const info = await getVideoInfo(videoId);
     const tracks = info.captions || [];
 
-    // Prefer Spanish, fallback to English
     const track =
       tracks.find((t: any) => t.languageCode === "es" || t.languageCode === "es-419") ??
       tracks.find((t: any) => t.languageCode?.startsWith("es")) ??
@@ -133,14 +80,6 @@ export async function getVideoDuration(videoPath: string): Promise<number> {
   });
 }
 
-interface Segment {
-  start: number;
-  end: number;
-  title: string;
-  reason: string;
-}
-
-// Detect scene changes near a timestamp to find cleaner cut points
 export async function findNearestSceneCut(
   videoPath: string,
   targetTime: number,
@@ -206,10 +145,10 @@ export async function cutSegment(
   if (assSubtitlePath) {
     const escapedPath = assSubtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
     vf += `,ass='${escapedPath}'`;
-    console.log(`[ShortsAI] Burning subtitles: ${assSubtitlePath}`);
+    console.log(`[fraym] Burning subtitles: ${assSubtitlePath}`);
   }
 
-  console.log(`[ShortsAI] Cutting segment #${index + 1} with filter: ${vf}`);
+  console.log(`[fraym] Cutting segment #${index + 1} with filter: ${vf}`);
 
   return new Promise((resolve, reject) => {
     const proc = spawn(FFMPEG, [

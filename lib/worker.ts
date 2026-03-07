@@ -1,12 +1,11 @@
-// Background worker — processes a single job through the full pipeline
 import { downloadVideo, downloadSubtitles, getVideoDuration, getFfmpegPath, cutSegment, cleanupJob, findNearestSceneCut } from "./video";
-import { parseSubtitles, detectBestMoments } from "./ai";
-import { detectCropRegion, buildCropFilter } from "./smartcrop";
+import { parseSubtitles } from "./parser";
+import { detectBestMoments } from "./detect";
+import { detectCropRegion, buildCropFilter } from "./crop";
 import { generateSubtitleFile } from "./subtitles";
 import { updateJob, setWorker } from "./queue";
 import type { Job } from "./queue";
 
-// Smooth progress — animates from current to target over duration
 function smoothProgress(
   jobId: string,
   from: number,
@@ -17,12 +16,11 @@ function smoothProgress(
   const steps = Math.max(1, Math.round(durationMs / 300));
   const increment = (to - from) / steps;
   const interval = durationMs / steps;
-  let current = from;
   let step = 0;
 
   const timer = setInterval(() => {
     step++;
-    current = Math.min(to, from + increment * step);
+    const current = Math.min(to, from + increment * step);
     const update: any = { progress: Math.round(current) };
     if (message && step === 1) update.message = message;
     updateJob(jobId, update);
@@ -40,29 +38,17 @@ function smoothProgress(
 async function processJob(job: Job): Promise<void> {
   const { id, url } = job;
 
-  // ====== STEP 1: DOWNLOAD (5% → 25%) ======
-  updateJob(id, {
-    status: "downloading",
-    progress: 5,
-    message: "Descargando video...",
-  });
+  // Step 1: Download (5% -> 25%)
+  updateJob(id, { status: "downloading", progress: 5, message: "Descargando video..." });
 
   const dlProgress = smoothProgress(id, 5, 24, 15000, "Descargando video...");
   const videoPath = await downloadVideo(url, id);
   dlProgress.stop();
 
-  updateJob(id, {
-    progress: 25,
-    message: "Video descargado",
-    videoPath,
-  });
+  updateJob(id, { progress: 25, message: "Video descargado", videoPath });
 
-  // ====== STEP 2: ANALYZE (26% → 50%) ======
-  updateJob(id, {
-    status: "analyzing",
-    progress: 26,
-    message: "Descargando subtitulos...",
-  });
+  // Step 2: Analyze (26% -> 50%)
+  updateJob(id, { status: "analyzing", progress: 26, message: "Descargando subtitulos..." });
 
   const subProgress = smoothProgress(id, 26, 34, 8000, "Descargando subtitulos...");
   const [duration, subtitlePath] = await Promise.all([
@@ -76,7 +62,7 @@ async function processJob(job: Job): Promise<void> {
   let chunks: { text: string; start: number; end: number }[] = [];
   if (subtitlePath) {
     chunks = await parseSubtitles(subtitlePath);
-    console.log(`[Worker] Parsed ${chunks.length} subtitle chunks`);
+    console.log(`[fraym] Parsed ${chunks.length} subtitle chunks`);
   }
 
   const aiProgress = smoothProgress(id, 36, 49, 12000, "IA analizando momentos...");
@@ -91,18 +77,10 @@ async function processJob(job: Job): Promise<void> {
     throw new Error("No se encontraron momentos adecuados");
   }
 
-  updateJob(id, {
-    progress: 50,
-    segments,
-    message: `${segments.length} momentos detectados`,
-  });
+  updateJob(id, { progress: 50, segments, message: `${segments.length} momentos detectados` });
 
-  // ====== STEP 3: PROCESS (51% → 95%) ======
-  updateJob(id, {
-    status: "processing",
-    progress: 51,
-    message: "Ajustando cortes a escenas...",
-  });
+  // Step 3: Process (51% -> 95%)
+  updateJob(id, { status: "processing", progress: 51, message: "Ajustando cortes a escenas..." });
 
   const sceneProgress = smoothProgress(id, 51, 56, 6000, "Ajustando cortes a escenas...");
   const sceneCuts = await Promise.all(
@@ -158,7 +136,7 @@ async function processJob(job: Job): Promise<void> {
     })
   );
 
-  // ====== STEP 4: DONE ======
+  // Step 4: Done
   updateJob(id, {
     status: "done",
     progress: 100,
@@ -167,7 +145,7 @@ async function processJob(job: Job): Promise<void> {
   });
 
   await cleanupJob(id).catch(() => {});
-  console.log(`[Worker] Job ${id} completed: ${outputs.length} shorts`);
+  console.log(`[fraym] Job ${id} completed: ${outputs.length} shorts`);
 }
 
 setWorker(processJob);
