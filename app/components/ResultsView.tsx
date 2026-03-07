@@ -1,7 +1,6 @@
 "use client";
 
-import Logo from "./Logo";
-import type { JobState, Segment } from "../hooks/useJob";
+import type { JobState } from "../hooks/useJob";
 
 interface Props {
   job: JobState;
@@ -15,69 +14,111 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function totalDuration(job: JobState): string {
+  const total = job.segments.reduce((acc, s) => acc + (s.end - s.start), 0);
+  return formatTime(total);
+}
+
 export default function ResultsView({ job, url, onReset }: Props) {
+  function downloadAll(e: React.MouseEvent) {
+    e.preventDefault();
+    job.outputs.forEach((o) => {
+      const a = document.createElement("a");
+      a.href = o;
+      a.download = "";
+      a.click();
+    });
+  }
+
   return (
     <div className="page" style={{ animation: "fadeIn 0.4s ease" }}>
+      {/* Nav */}
       <nav className="nav">
-        <button className="logo" onClick={onReset}><Logo /></button>
-        <span className="mobile-only" onClick={onReset} style={{ color: "var(--accent)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>+ Nuevo</span>
+        <button className="logo" onClick={onReset}>
+          <span className="logo-wordmark">
+            <span style={{ color: "var(--accent)" }}>f</span>raym
+          </span>
+        </button>
         <button className="btn-dark desktop-only" onClick={onReset}>
           Nuevo video +
         </button>
+        <span
+          className="mobile-only"
+          onClick={onReset}
+          style={{ color: "var(--accent)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}
+        >
+          + Nuevo
+        </span>
       </nav>
 
-      <main className="results-main" style={{ animation: "fadeInUp 0.5s ease" }}>
-        <div className="results-header">
-          <div>
-            <h1 className="results-title desktop-only">{job.outputs.length} shorts listos.</h1>
-            <h1 className="results-title mobile-only">{job.outputs.length} shorts generados</h1>
-            <p className="mobile-subtitle" style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 4 }}>
-              Descarga o comparte tus clips
-            </p>
+      <main className="results-main">
+        {/* Header */}
+        <div className="results-header" style={{ animation: "fadeInUp 0.4s ease" }}>
+          <div className="results-success-row">
+            <span className="results-check">✓</span>
+            <span className="results-success-text">Completado</span>
           </div>
-          <div className="results-actions">
-            <span className="results-url">
-              {url.replace(/https?:\/\/(www\.)?/, "").slice(0, 30)}
-            </span>
-            <a
-              href="#"
-              className="btn-primary"
-              onClick={(e) => {
-                e.preventDefault();
-                job.outputs.forEach((o) => {
-                  const a = document.createElement("a");
-                  a.href = o; a.download = ""; a.click();
-                });
-              }}
-            >
-              Descargar todo &#8595;
-            </a>
-          </div>
+          <h1 className="results-title">{job.outputs.length} shorts listos</h1>
+          <p className="results-subtitle desktop-only">
+            Toca un clip para previsualizarlo o descarga todos.
+          </p>
+          <p className="results-subtitle mobile-only">
+            Descarga o comparte tus clips
+          </p>
         </div>
 
-        <div className="cards-grid">
+        {/* Cards */}
+        <div className="results-cards">
           {job.outputs.map((output, i) => {
             const seg = job.segments[i];
+            const duration = seg ? formatTime(seg.end - seg.start) : "—";
             return (
-              <div key={i} className="card" style={{ animation: `scaleIn 0.4s ease ${i * 0.08}s both` }}>
-                <video src={output} controls preload="metadata" />
-                <div className="card-body">
-                  <p className="card-title">{seg?.title || `Short #${i + 1}`}</p>
-                  <div className="card-meta">
-                    <span className="card-time">
-                      {seg ? `${formatTime(seg.start)} — ${formatTime(seg.end)}  ·  Short #${i + 1}` : ""}
-                    </span>
-                    <a href={output} download className="card-dl desktop-only">
-                      Descargar &#8595;
+              <div
+                key={i}
+                className="rcard"
+                style={{ animation: `fadeInUp 0.4s ease ${i * 0.08}s both` }}
+              >
+                <div className="rcard-thumb">
+                  <video src={output} preload="metadata" />
+                  <button
+                    className="rcard-play"
+                    onClick={(e) => {
+                      const video = e.currentTarget.parentElement?.querySelector("video");
+                      if (video) {
+                        if (video.paused) video.play();
+                        else video.pause();
+                      }
+                    }}
+                  >
+                    ▶
+                  </button>
+                </div>
+                <div className="rcard-info">
+                  <div className="rcard-top">
+                    <span className="rcard-badge">CLIP {i + 1}</span>
+                    <p className="rcard-title">{seg?.title || `Short #${i + 1}`}</p>
+                    <p className="rcard-reason">{seg?.reason || ""}</p>
+                  </div>
+                  <div className="rcard-bottom">
+                    <span className="rcard-meta">{duration} · 720p</span>
+                    <a href={output} download className="rcard-dl" title="Descargar">
+                      ↓
                     </a>
                   </div>
-                  <a href={output} download className="card-dl-btn mobile-only">
-                    Descargar
-                  </a>
                 </div>
               </div>
             );
           })}
+        </div>
+
+        {/* Bottom CTA */}
+        <div className="results-bottom" style={{ animation: "fadeInUp 0.5s ease 0.2s both" }}>
+          <button className="results-dl-btn" onClick={downloadAll}>
+            <span>↓</span> Descargar todo
+          </button>
+          <span className="results-dl-meta">
+            {job.outputs.length} clips · {totalDuration(job)} total
+          </span>
         </div>
       </main>
     </div>
