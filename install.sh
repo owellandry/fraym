@@ -130,18 +130,16 @@ docker compose up -d
 
 ok "Contenedor corriendo"
 
-# ─── Install CLI ───
-chmod +x "$INSTALL_DIR/scripts/fraym.sh"
+# ─── Install CLI + hooks ───
+bash "$INSTALL_DIR/scripts/setup-cli.sh" 2>/dev/null
+bash "$INSTALL_DIR/scripts/install-hooks.sh" 2>/dev/null
 
-# Create global symlink
-if [ -d "/usr/local/bin" ]; then
-  ln -sf "$INSTALL_DIR/scripts/fraym.sh" /usr/local/bin/fraym 2>/dev/null || true
-  if command -v fraym &>/dev/null; then
-    ok "CLI instalado: ${BOLD}fraym${NC}"
-  else
-    warn "No se pudo crear symlink en /usr/local/bin"
-    echo -e "       ${DIM}Puedes usar directamente:${NC} ${CYAN}bash $INSTALL_DIR/scripts/fraym.sh${NC}"
-  fi
+if command -v fraym &>/dev/null; then
+  ok "CLI instalado: ${BOLD}fraym${NC}"
+  ok "Git hooks configurados ${DIM}(CLI se actualiza con git pull)${NC}"
+else
+  warn "No se pudo crear symlink en /usr/local/bin"
+  echo -e "       ${DIM}Puedes usar directamente:${NC} ${CYAN}bash $INSTALL_DIR/scripts/fraym.sh${NC}"
 fi
 
 # ─── Get server IP ───

@@ -10,9 +10,21 @@ R='\033[0;31m'    G='\033[0;32m'    Y='\033[0;33m'
 C='\033[0;36m'    M='\033[0;35m'    D='\033[2m'
 B='\033[1m'       N='\033[0m'
 
-# Find fraym install dir
-FRAYM_DIR="${FRAYM_DIR:-$HOME/fraym}"
+# Auto-detect install dir from script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FRAYM_DIR="${FRAYM_DIR:-$(dirname "$SCRIPT_DIR")}"
 COMPOSE="docker compose -f $FRAYM_DIR/docker-compose.yml"
+
+# Auto-install: create symlink if not already in PATH
+if [ ! -L /usr/local/bin/fraym ] || [ "$(readlink -f /usr/local/bin/fraym 2>/dev/null)" != "$(readlink -f "$SCRIPT_DIR/fraym.sh" 2>/dev/null)" ]; then
+  if [ -w /usr/local/bin ] 2>/dev/null; then
+    ln -sf "$SCRIPT_DIR/fraym.sh" /usr/local/bin/fraym 2>/dev/null
+  elif command -v sudo &>/dev/null; then
+    sudo ln -sf "$SCRIPT_DIR/fraym.sh" /usr/local/bin/fraym 2>/dev/null || true
+  fi
+  # Install git hooks too
+  bash "$SCRIPT_DIR/install-hooks.sh" 2>/dev/null || true
+fi
 
 banner() {
   echo ""
