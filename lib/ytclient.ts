@@ -9,7 +9,7 @@ let _yt: Innertube | null = null;
 export async function getYT(): Promise<Innertube> {
   if (_yt) return _yt;
   await fs.mkdir(CACHE_DIR, { recursive: true });
-  _yt = await Innertube.create({ generate_session_locally: true });
+  _yt = await Innertube.create();
   return _yt;
 }
 
