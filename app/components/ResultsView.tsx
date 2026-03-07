@@ -19,6 +19,10 @@ function totalDuration(job: JobState): string {
   return formatTime(total);
 }
 
+function shortUrl(url: string): string {
+  return url.replace(/https?:\/\/(www\.)?/, "").slice(0, 35);
+}
+
 export default function ResultsView({ job, url, onReset }: Props) {
   function downloadAll(e: React.MouseEvent) {
     e.preventDefault();
@@ -52,23 +56,57 @@ export default function ResultsView({ job, url, onReset }: Props) {
       </nav>
 
       <main className="results-main">
-        {/* Header */}
-        <div className="results-header" style={{ animation: "fadeInUp 0.4s ease" }}>
+        {/* Desktop header: title + actions on same row */}
+        <div className="results-header-desktop desktop-only" style={{ animation: "fadeInUp 0.4s ease" }}>
+          <h1 className="results-title">{job.outputs.length} shorts listos.</h1>
+          <div className="results-header-actions">
+            <span className="results-url">{shortUrl(url)}</span>
+            <span className="results-count-pill">{job.outputs.length} de maximo</span>
+            <button className="btn-primary" onClick={downloadAll}>
+              Descargar todo ↓
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile header: stacked with success badge */}
+        <div className="results-header-mobile mobile-only" style={{ animation: "fadeInUp 0.4s ease" }}>
           <div className="results-success-row">
             <span className="results-check">✓</span>
             <span className="results-success-text">Completado</span>
           </div>
           <h1 className="results-title">{job.outputs.length} shorts listos</h1>
-          <p className="results-subtitle desktop-only">
-            Toca un clip para previsualizarlo o descarga todos.
-          </p>
-          <p className="results-subtitle mobile-only">
-            Descarga o comparte tus clips
-          </p>
+          <p className="results-subtitle">Descarga o comparte tus clips</p>
         </div>
 
-        {/* Cards */}
-        <div className="results-cards">
+        {/* Desktop cards: vertical grid with 9:16 video */}
+        <div className="cards-grid desktop-only">
+          {job.outputs.map((output, i) => {
+            const seg = job.segments[i];
+            return (
+              <div
+                key={i}
+                className="card"
+                style={{ animation: `scaleIn 0.4s ease ${i * 0.08}s both` }}
+              >
+                <video src={output} controls preload="metadata" />
+                <div className="card-body">
+                  <p className="card-title">{seg?.title || `Short #${i + 1}`}</p>
+                  <div className="card-meta">
+                    <span className="card-time">
+                      {seg ? `${formatTime(seg.start)} → ${formatTime(seg.end)}` : ""}
+                    </span>
+                    <a href={output} download className="card-dl">
+                      Descargar ↓
+                    </a>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Mobile cards: horizontal with thumbnail */}
+        <div className="results-cards mobile-only">
           {job.outputs.map((output, i) => {
             const seg = job.segments[i];
             const duration = seg ? formatTime(seg.end - seg.start) : "—";
@@ -111,8 +149,8 @@ export default function ResultsView({ job, url, onReset }: Props) {
           })}
         </div>
 
-        {/* Bottom CTA */}
-        <div className="results-bottom" style={{ animation: "fadeInUp 0.5s ease 0.2s both" }}>
+        {/* Mobile bottom CTA */}
+        <div className="results-bottom mobile-only" style={{ animation: "fadeInUp 0.5s ease 0.2s both" }}>
           <button className="results-dl-btn" onClick={downloadAll}>
             <span>↓</span> Descargar todo
           </button>
