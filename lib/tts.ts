@@ -6,16 +6,15 @@ import fs from "fs/promises";
 import { TMP_DIR } from "./config";
 import { logVideo } from "./logger";
 
-export interface TTSResult {
-  audioPath: string;
-  duration: number;  // estimated from text length
-  wordBoundaries: WordBoundary[];
+export interface WordTiming {
+  text: string;
+  start: number;  // seconds
+  end: number;    // seconds
 }
 
-export interface WordBoundary {
-  text: string;
-  offset: number;  // ms from start
-  duration: number; // ms
+export interface TTSResult {
+  audioPath: string;
+  words: WordTiming[];
 }
 
 // Spanish voices — best quality neural voices
@@ -55,17 +54,19 @@ export async function synthesize(
 
   const mp3Path = `${audioPath}.mp3`;
 
+  // Get precise word timing from TTS engine
+  const boundaries = tts.getWordBoundaries() || [];
+  const TICKS_TO_SEC = 10_000_000; // 1 tick = 100 nanoseconds
+
+  const words: WordTiming[] = boundaries.map((wb: any) => ({
+    text: wb.text,
+    start: wb.offset / TICKS_TO_SEC,
+    end: (wb.offset + wb.duration) / TICKS_TO_SEC,
+  }));
+
   // Verify file exists
   const stat = await fs.stat(mp3Path);
-  logVideo.success("Audio TTS generado", `${(stat.size / 1024).toFixed(0)}KB`);
+  logVideo.success("Audio TTS generado", `${(stat.size / 1024).toFixed(0)}KB · ${words.length} palabras`);
 
-  // Estimate duration from text (~150 words/min for Spanish)
-  const wordCount = text.split(/\s+/).length;
-  const estimatedDuration = (wordCount / 150) * 60;
-
-  return {
-    audioPath: mp3Path,
-    duration: estimatedDuration,
-    wordBoundaries: [],
-  };
+  return { audioPath: mp3Path, words };
 }

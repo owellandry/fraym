@@ -5,7 +5,7 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs/promises";
 import { TMP_DIR, OUTPUT_DIR, FFMPEG, FFPROBE, ensureDirs } from "./config";
-import { synthesize } from "./tts";
+import { synthesize, type WordTiming } from "./tts";
 import { downloadBackground, isPexelsConfigured } from "./pexels";
 import { logVideo, logAI } from "./logger";
 
@@ -34,22 +34,26 @@ async function generateScript(topic: string, style: string): Promise<string> {
 ESTILO: ${stylePrompts[style] || stylePrompts.facts}
 
 REGLAS:
-- Duracion del texto: entre 100 y 200 palabras (30-60 segundos al hablar)
+- Duracion del texto: entre 200 y 350 palabras (60-120 segundos al hablar). Para historias, usa MINIMO 300 palabras
 - Empieza con un GANCHO que atrape en los primeros 3 segundos
 - Lenguaje natural y coloquial, como si hablaras con un amigo
 - NO uses emojis, hashtags, ni indicaciones de edicion
 - NO escribas titulos, solo el texto narrado
 - Termina con algo memorable o un llamado a la accion
-- Escribe SOLO el texto del guion, nada mas`;
+- Escribe SOLO el texto del guion, nada mas
+- NO empieces con "Aqui tienes", "Vale", "Claro", "Titulo:", ni ninguna introduccion. Empieza DIRECTAMENTE con el gancho del video`;
 
   const MODELS = [
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "openai/gpt-oss-120b:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",
     "google/gemma-3-27b-it:free",
     "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen3-4b:free",
+    "stepfun/step-3.5-flash:free",
     "mistralai/mistral-small-3.1-24b-instruct:free",
-    "deepseek/deepseek-r1-0528:free",
-    "google/gemma-3-4b-it:free",
-    "meta-llama/llama-4-scout:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "qwen/qwen3-4b:free",
+    "google/gemma-3-12b-it:free",
   ];
 
   for (const model of MODELS) {
@@ -67,7 +71,7 @@ REGLAS:
           model,
           messages: [{ role: "user", content: prompt }],
           temperature: 0.8,
-          max_tokens: 1000,
+          max_tokens: 2000,
         }),
       });
 
@@ -79,16 +83,25 @@ REGLAS:
       const data: any = await res.json();
       const content = data.choices?.[0]?.message?.content?.trim();
       if (content && content.length > 50) {
-        // Clean up any markdown or thinking tags
+        // Clean up AI preamble, markdown, thinking tags
         const cleaned = content
           .replace(/<think>[\s\S]*?<\/think>/g, "")
           .replace(/^```[\s\S]*?```$/gm, "")
           .replace(/^#+\s/gm, "")
           .replace(/^\*\*/gm, "")
           .replace(/\*\*/g, "")
+          // Remove common AI preambles before the actual script
+          .replace(/^(vale|ok|claro|aqu[ií]|bien|listo|perfecto|por supuesto)[^.!?\n]*?(guion|historia|texto|script|narración)[^.!?\n]*?[.:!\n]/i, "")
+          .replace(/^(here'?s?|sure|okay)[^.!?\n]*?(script|story|text)[^.!?\n]*?[.:!\n]/i, "")
+          // Remove lines that are just labels like "Guion:", "Historia:", etc.
+          .replace(/^\s*(guion|historia|texto|script|narración|título|title)\s*[:]\s*\n?/gim, "")
+          .replace(/^\s*---+\s*$/gm, "")
           .trim();
 
         logAI.success("Guion generado", `${cleaned.split(/\s+/).length} palabras`);
+        logAI.info("--- GUION ---");
+        console.log(cleaned);
+        logAI.info("--- FIN GUION ---");
         return cleaned;
       }
     } catch (err: any) {
@@ -126,16 +139,16 @@ async function composeVideo(
   audioPath: string,
   audioDuration: number,
   bgDuration: number,
-  script: string,
+  words: WordTiming[],
   jobId: string,
 ): Promise<string> {
   await ensureDirs();
   const outputName = `${jobId}_ai_short.mp4`;
   const outputPath = path.join(OUTPUT_DIR, outputName);
 
-  // Generate ASS subtitle file from script
+  // Generate ASS subtitle file with precise word timing and color highlight
   const assPath = path.join(TMP_DIR, `${jobId}_ai_subs.ass`);
-  await generateScriptSubtitles(script, audioDuration, assPath);
+  await generateScriptSubtitles(words, audioDuration, assPath);
 
   // Build ffmpeg command:
   // 1. Loop/trim background video to match audio duration
@@ -184,26 +197,36 @@ async function composeVideo(
   });
 }
 
-// --- Generate ASS subtitles from script text ---
+// --- Generate ASS subtitles with precise word timing and color highlight ---
+
+// Accent color in ASS BGR format (FF5C35 → 355CFF in BGR)
+const HIGHLIGHT_COLOR = "&H00355CFF&";
+const NORMAL_COLOR = "&H00FFFFFF&";
 
 async function generateScriptSubtitles(
-  script: string,
+  words: WordTiming[],
   totalDuration: number,
   outputPath: string
 ): Promise<void> {
-  // Split into short phrases (2-5 words each) for TikTok-style captions
-  const words = script.split(/\s+/).filter(Boolean);
-  const phrases: string[] = [];
-  const WORDS_PER_PHRASE = 3;
-
-  for (let i = 0; i < words.length; i += WORDS_PER_PHRASE) {
-    const phrase = words.slice(i, i + WORDS_PER_PHRASE).join(" ");
-    if (phrase) phrases.push(phrase);
+  if (words.length === 0) {
+    await fs.writeFile(outputPath, "", "utf-8");
+    return;
   }
 
-  const phraseDuration = totalDuration / phrases.length;
+  // Group words into phrases of 3-4 words based on timing
+  const WORDS_PER_PHRASE = 3;
+  const phrases: { words: WordTiming[]; start: number; end: number }[] = [];
 
-  // ASS header with TikTok-style formatting
+  for (let i = 0; i < words.length; i += WORDS_PER_PHRASE) {
+    const chunk = words.slice(i, i + WORDS_PER_PHRASE);
+    phrases.push({
+      words: chunk,
+      start: chunk[0]!.start,
+      end: chunk[chunk.length - 1]!.end,
+    });
+  }
+
+  // ASS header
   let ass = `[Script Info]
 Title: AI Generated Subtitles
 ScriptType: v4.00+
@@ -213,20 +236,31 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,40,40,400,1
+Style: Default,Arial,72,${NORMAL_COLOR},&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,0,2,40,40,400,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
-  for (let i = 0; i < phrases.length; i++) {
-    const start = i * phraseDuration;
-    const end = Math.min((i + 1) * phraseDuration, totalDuration);
-    const startStr = formatASSTime(start);
-    const endStr = formatASSTime(end);
-    // Uppercase for impact
-    const text = phrases[i]!.toUpperCase();
-    ass += `Dialogue: 0,${startStr},${endStr},Default,,0,0,0,,${text}\n`;
+  // For each phrase, generate one dialogue line per word (with karaoke highlight)
+  // Each word gets its own timing — the full phrase shows but the active word is colored
+  for (const phrase of phrases) {
+    for (let w = 0; w < phrase.words.length; w++) {
+      const activeWord = phrase.words[w]!;
+      const start = activeWord.start;
+      const end = activeWord.end;
+
+      // Build text with highlight on the active word
+      const parts = phrase.words.map((word, idx) => {
+        const upper = word.text.toUpperCase();
+        if (idx === w) {
+          return `{\\c${HIGHLIGHT_COLOR}}${upper}{\\c${NORMAL_COLOR}}`;
+        }
+        return upper;
+      });
+
+      ass += `Dialogue: 0,${formatASSTime(start)},${formatASSTime(end)},Default,,0,0,0,,${parts.join(" ")}\n`;
+    }
   }
 
   await fs.writeFile(outputPath, ass, "utf-8");
@@ -269,7 +303,7 @@ export async function generateAIVideo(
   // Step 4: Compose final video (60% → 95%)
   onProgress(65, "Componiendo video...");
   const output = await composeVideo(
-    bg.path, tts.audioPath, audioDuration, bg.duration, script, jobId
+    bg.path, tts.audioPath, audioDuration, bg.duration, tts.words, jobId
   );
   onProgress(95, "Video casi listo...");
 

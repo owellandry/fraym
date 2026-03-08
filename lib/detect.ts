@@ -86,13 +86,16 @@ Responde SOLO con un JSON array, sin explicaciones ni markdown:
     logAI.step("Iniciando deteccion con IA...");
 
     const MODELS = [
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "openai/gpt-oss-120b:free",
+      "nousresearch/hermes-3-llama-3.1-405b:free",
       "google/gemma-3-27b-it:free",
       "meta-llama/llama-3.3-70b-instruct:free",
-      "qwen/qwen3-4b:free",
+      "stepfun/step-3.5-flash:free",
       "mistralai/mistral-small-3.1-24b-instruct:free",
-      "deepseek/deepseek-r1-0528:free",
-      "google/gemma-3-4b-it:free",
-      "meta-llama/llama-4-scout:free",
+      "nvidia/nemotron-3-nano-30b-a3b:free",
+      "qwen/qwen3-4b:free",
+      "google/gemma-3-12b-it:free",
     ];
 
     let data: any = null;
