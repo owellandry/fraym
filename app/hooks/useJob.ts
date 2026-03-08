@@ -50,6 +50,7 @@ export const VOICE_OPTIONS = [
 ] as const;
 
 export const BG_CATEGORIES = [
+  { key: "parkour", label: "Parkour" },
   { key: "satisfying", label: "Satisfying" },
   { key: "nature", label: "Naturaleza" },
   { key: "city", label: "Ciudad" },
@@ -80,7 +81,7 @@ export function useJob() {
   // AI video options
   const [topic, setTopic] = useState("");
   const [voice, setVoice] = useState("es-mx-m");
-  const [background, setBackground] = useState("abstract");
+  const [background, setBackground] = useState("parkour");
   const [style, setStyle] = useState("facts");
 
   const [job, setJob] = useState<JobState>(INITIAL_STATE);

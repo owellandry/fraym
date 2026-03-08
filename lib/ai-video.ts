@@ -6,7 +6,8 @@ import path from "path";
 import fs from "fs/promises";
 import { TMP_DIR, OUTPUT_DIR, FFMPEG, FFPROBE, ensureDirs } from "./config";
 import { synthesize, type WordTiming } from "./tts";
-import { downloadBackground, isPexelsConfigured } from "./pexels";
+import { downloadBackground } from "./pexels";
+import { downloadYTBackground } from "./backgrounds";
 import { logVideo, logAI } from "./logger";
 
 export interface AIVideoOptions {
@@ -378,9 +379,16 @@ export async function generateAIVideo(
   onProgress(35, "Voz generada");
 
   // Step 3: Download background video (35% → 60%)
-  onProgress(40, "Buscando video de fondo...");
+  onProgress(40, "Descargando video de fondo...");
   const bgPath = path.join(TMP_DIR, `${jobId}_bg.mp4`);
-  const bg = await downloadBackground(options.background, audioDuration, bgPath);
+  let bg: { path: string; duration: number };
+  if (options.background === "parkour") {
+    // Free YT parkour videos (OrbitalNCG, no copyright)
+    bg = await downloadYTBackground(audioDuration, bgPath);
+  } else {
+    // Pexels stock videos for other categories
+    bg = await downloadBackground(options.background, audioDuration, bgPath);
+  }
   onProgress(60, "Fondo descargado");
 
   // Step 4: Compose final video (60% → 95%)
