@@ -23,37 +23,96 @@ async function generateScript(topic: string, style: string): Promise<string> {
   if (!apiKey) throw new Error("OPENROUTER_API_KEY not configured");
 
   const stylePrompts: Record<string, string> = {
-    story: `Cuenta una historia fascinante y dramatica sobre el tema. Usa primera persona cuando sea posible. Crea tension y un desenlace sorprendente. Estilo storytime de TikTok.`,
-    facts: `Presenta 3-5 datos curiosos e impactantes sobre el tema. Cada dato debe sorprender al espectador. Estilo "sabias que..." de TikTok.`,
-    motivation: `Crea un discurso motivacional corto e impactante sobre el tema. Usa frases poderosas y directas. Estilo coach motivacional de TikTok.`,
-    news: `Presenta la noticia o tema de forma directa e impactante. Empieza con lo mas sorprendente. Estilo noticiero viral de TikTok.`,
+    story: `Eres el mejor narrador de historias del mundo. Tu trabajo es crear una historia que sea IMPOSIBLE de dejar de escuchar.
+
+ESTRUCTURA NARRATIVA OBLIGATORIA (sigue CADA paso):
+
+1. GANCHO BRUTAL (primeras 2 frases): Empieza con algo tan impactante que sea fisicamente imposible hacer scroll. Ejemplos: "A las 3 de la madrugada sono mi telefono y lo que escuche me helo la sangre", "Lo que voy a contar paso hace exactamente 47 dias y todavia no puedo dormir por las noches"
+
+2. CONTEXTO INMERSIVO (200-400 palabras): NO me digas "habia un hombre". Dame su nombre, su edad, que hacia ahi, como se sentia. Describe el lugar — la temperatura, los sonidos, los olores. Haz que el oyente ESTE ahi. Construye el mundo donde va a pasar todo. Presenta las relaciones entre personajes. Siembra pistas sutiles de lo que viene.
+
+3. PRIMER PUNTO DE TENSION (200-300 palabras): Algo cambia. Algo no cuadra. Alguien dice algo que no deberia. Un detalle que parecia insignificante ahora cobra sentido. El oyente siente que algo va mal pero no sabe que. Mantén la incertidumbre.
+
+4. ESCALADA Y DESARROLLO (500-800 palabras): AQUI es donde la historia cobra vida. Cada parrafo sube la tension un nivel. Incluye:
+   - Dialogos cortos y naturales ("Me miro a los ojos y me dijo: no abras esa puerta")
+   - Pensamientos internos del protagonista
+   - Detalles fisicos de tension (manos sudando, corazon acelerado, boca seca)
+   - Decisiones imposibles que el protagonista debe tomar
+   - Al menos un momento donde todo parece resolverse... pero NO
+   - Giros que el oyente NO veia venir
+   - Consecuencias reales de las acciones
+
+5. CLIMAX DEVASTADOR (200-400 palabras): Todo explota. La verdad sale a la luz. Lo que el oyente pensaba que pasaba NO era lo que realmente pasaba. Este momento debe dejar al oyente literalmente con la boca abierta. Describe cada segundo de este momento con detalle cinematografico.
+
+6. DESENLACE MEMORABLE (100-200 palabras): Cierra la historia de forma que se quede en la mente del oyente. Puede ser una reflexion profunda, una ultima revelacion, algo agridulce, o una frase final que cambie TODO el significado de lo que acaba de escuchar.
+
+USA PRIMERA PERSONA siempre que sea posible. Describe emociones con el cuerpo: "senti un nudo en la garganta", "las piernas me fallaron", "me quede paralizado". NO resumas NUNCA — cada momento importante debe sentirse vivido, detallado, real.`,
+
+    facts: `Presenta 8-12 datos absolutamente INCREIBLES sobre el tema. Pero NO los listes como una wikipedia — cuenta cada dato como una mini-historia:
+
+Para CADA dato:
+1. Empieza con algo que suene imposible ("Existe un lugar en la Tierra donde llueve hacia arriba")
+2. Da el contexto completo — donde, cuando, quien lo descubrio, por que pasa
+3. Compara con algo cotidiano para que se entienda la magnitud ("eso es como si tomaras todo el agua del mediterraneo y...")
+4. Explica las implicaciones — por que deberia importarnos
+5. Conecta con el siguiente dato creando un hilo narrativo fluido
+
+Cada dato debe tener su propio mini-arco narrativo de al menos 150-300 palabras. El oyente debe sentir que esta descubriendo algo nuevo con cada uno.`,
+
+    motivation: `Crea un discurso motivacional que deje marcas. NO uses cliches como "tu puedes" o "nunca te rindas" sin contexto.
+
+ESTRUCTURA:
+1. Empieza con una historia REAL de fracaso brutal — alguien que lo perdio TODO
+2. Describe el momento mas oscuro con detalles que el oyente pueda sentir
+3. Luego muestra el punto de quiebre — ese momento exacto donde todo cambio
+4. Desarrolla paso a paso como esa persona reconstruyo todo, con detalles concretos
+5. Alterna entre la historia y reflexiones directas al oyente ("Y seguramente tu ahora mismo estas pensando que es imposible...")
+6. Construye hasta un climax emocional con repeticion retorica
+7. Cierra con una frase que se quede grabada en la mente
+
+Usa pausas dramaticas (frases cortas despues de parrafos largos). Alterna entre susurro y grito retorico. Haz que cada frase PEGUE.`,
+
+    news: `Presenta esto como un documental investigativo completo:
+
+1. Abre con el dato mas IMPACTANTE de toda la noticia — lo que nadie esperaba
+2. Retrocede al principio y cuenta TODA la cronologia con fechas, nombres, lugares
+3. Incluye multiples perspectivas — que dijo cada parte involucrada
+4. Revela detalles que el publico general NO conoce
+5. Analiza las causas profundas — como llegamos a este punto
+6. Explica las consecuencias a corto y largo plazo
+7. Cierra con una reflexion que conecte con la vida del oyente
+
+Cada seccion debe tener suficiente detalle como para que el oyente sienta que esta viendo un documental de Netflix, no leyendo un tweet.`,
   };
 
-  const prompt = `Genera un guion para un video corto viral de TikTok/YouTube Shorts sobre: "${topic}"
+  const prompt = `Genera un guion MUY LARGO, DETALLADO y ENVOLVENTE para un video viral sobre: "${topic}"
 
 ESTILO: ${stylePrompts[style] || stylePrompts.facts}
 
-REGLAS:
-- Duracion del texto: entre 200 y 350 palabras (60-120 segundos al hablar). Para historias, usa MINIMO 300 palabras
-- Empieza con un GANCHO que atrape en los primeros 3 segundos
-- Lenguaje natural y coloquial, como si hablaras con un amigo
+REGLAS ABSOLUTAS — LEE CADA UNA:
+- EXTENSION: entre 800 y 5000 palabras. Apunta a MINIMO 1500 palabras. El guion debe durar entre 3 y 10 minutos hablando. Cuanto mas largo y detallado, MEJOR. NO te limites — escribe TODO lo que la historia necesite
+- Empieza DIRECTAMENTE con el gancho. La primera frase decide si el oyente se queda o se va
+- Lenguaje 100% natural y coloquial. Como si estuvieras en una fogata contandole la historia a tus amigos. Nada de lenguaje formal ni de enciclopedia
+- DESARROLLA cada momento. Si un personaje entra a una habitacion, describe que ve, que huele, que siente. Si alguien dice algo importante, pon el dialogo textual
+- NUNCA resumas. NUNCA digas "paso el tiempo" o "despues de varios intentos". CUENTA cada intento, cada momento, cada detalle
 - NO uses emojis, hashtags, ni indicaciones de edicion
-- NO escribas titulos, solo el texto narrado
-- Termina con algo memorable o un llamado a la accion
-- Escribe SOLO el texto del guion, nada mas
-- NO empieces con "Aqui tienes", "Vale", "Claro", "Titulo:", ni ninguna introduccion. Empieza DIRECTAMENTE con el gancho del video`;
+- NO escribas titulos ni encabezados, solo el texto narrado continuo
+- Termina con algo que el oyente NO pueda olvidar
+- Escribe UNICAMENTE el texto del guion. NADA mas
+- NO empieces con "Aqui tienes", "Vale", "Claro", "Titulo:", "Guion:", ni ninguna meta-introduccion. La PRIMERA palabra debe ser parte del gancho de la historia`;
 
+  // Models prioritized by output capacity (large output first)
   const MODELS = [
+    "stepfun/step-3.5-flash:free",                      // 256K output — best for long scripts
+    "nvidia/nemotron-3-nano-30b-a3b:free",               // 256K context
+    "arcee-ai/trinity-large-preview:free",               // 131K context
+    "arcee-ai/trinity-mini:free",                        // 131K context
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "openai/gpt-oss-120b:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
     "google/gemma-3-27b-it:free",
     "meta-llama/llama-3.3-70b-instruct:free",
-    "stepfun/step-3.5-flash:free",
     "mistralai/mistral-small-3.1-24b-instruct:free",
-    "nvidia/nemotron-3-nano-30b-a3b:free",
-    "qwen/qwen3-4b:free",
-    "google/gemma-3-12b-it:free",
   ];
 
   for (const model of MODELS) {
@@ -70,8 +129,8 @@ REGLAS:
         body: JSON.stringify({
           model,
           messages: [{ role: "user", content: prompt }],
-          temperature: 0.8,
-          max_tokens: 2000,
+          temperature: 0.85,
+          max_tokens: 16384,
         }),
       });
 
@@ -98,7 +157,15 @@ REGLAS:
           .replace(/^\s*---+\s*$/gm, "")
           .trim();
 
-        logAI.success("Guion generado", `${cleaned.split(/\s+/).length} palabras`);
+        const wordCount = cleaned.split(/\s+/).length;
+
+        // Reject scripts that are too short — try next model
+        if (wordCount < 600) {
+          logAI.warn(`Guion demasiado corto (${wordCount} palabras, minimo 600), probando otro modelo...`, model);
+          continue;
+        }
+
+        logAI.success("Guion generado", `${wordCount} palabras`);
         logAI.info("--- GUION ---");
         console.log(cleaned);
         logAI.info("--- FIN GUION ---");
@@ -297,7 +364,7 @@ export async function generateAIVideo(
   // Step 3: Download background video (35% → 60%)
   onProgress(40, "Buscando video de fondo...");
   const bgPath = path.join(TMP_DIR, `${jobId}_bg.mp4`);
-  const bg = await downloadBackground(options.background, Math.min(audioDuration, 30), bgPath);
+  const bg = await downloadBackground(options.background, audioDuration, bgPath);
   onProgress(60, "Fondo descargado");
 
   // Step 4: Compose final video (60% → 95%)
