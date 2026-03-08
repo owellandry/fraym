@@ -1,5 +1,5 @@
-import path from "path";
-import * as fs from "fs";
+import path from "node:path";
+import * as fs from "node:fs";
 
 const OUTPUTS_DIR = path.join(process.cwd(), "public", "outputs");
 

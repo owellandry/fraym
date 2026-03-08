@@ -1,15 +1,19 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { createJob, getJob } from "@/lib/queue";
 import { logAPI, printBanner } from "@/lib/logger";
-// Import workers to register them
-import "@/lib/worker";
-import "@/lib/ai-worker";
 
-// Print startup banner on first load
-printBanner();
+// Register workers lazily (dynamic import avoids pulling Node.js builtins into RSC bundle)
+let workersLoaded = false;
+async function ensureWorkers() {
+  if (workersLoaded) return;
+  workersLoaded = true;
+  await Promise.all([import("@/lib/worker"), import("@/lib/ai-worker")]);
+  printBanner();
+}
 
 // POST /api/jobs — Create a new job (returns immediately)
 export async function POST(request: Request) {
+  await ensureWorkers();
   try {
     const body = await request.json();
     const id = crypto.randomUUID().slice(0, 8);
@@ -75,6 +79,7 @@ export async function POST(request: Request) {
 
 // GET /api/jobs?id=xxx — Get job status
 export async function GET(request: Request) {
+  await ensureWorkers();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
