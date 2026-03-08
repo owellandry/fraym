@@ -220,6 +220,7 @@ export default function ResultsView({ job, url, onReset }: Props) {
         <div className="cards-grid desktop-only">
           {job.outputs.map((output, i) => {
             const seg = job.segments[i];
+            const isAI = seg && seg.start === 0 && seg.end === 0;
             return (
               <div
                 key={i}
@@ -232,7 +233,9 @@ export default function ResultsView({ job, url, onReset }: Props) {
                   <p className="card-title">{getSegmentTitle(seg, i)}</p>
                   <div className="card-meta">
                     <span className="card-time">
-                      {seg ? `${formatTime(seg.start)} → ${formatTime(seg.end)}` : ""}
+                      {isAI
+                        ? "Video IA"
+                        : seg ? `${formatTime(seg.start)} → ${formatTime(seg.end)}` : ""}
                     </span>
                     <a
                       href={output}
@@ -253,7 +256,8 @@ export default function ResultsView({ job, url, onReset }: Props) {
         <div className="results-cards mobile-only">
           {job.outputs.map((output, i) => {
             const seg = job.segments[i];
-            const duration = seg ? formatTime(seg.end - seg.start) : "—";
+            const isAI = seg && seg.start === 0 && seg.end === 0;
+            const duration = seg && !isAI ? formatTime(seg.end - seg.start) : null;
             return (
               <div
                 key={i}
@@ -269,12 +273,12 @@ export default function ResultsView({ job, url, onReset }: Props) {
                 </div>
                 <div className="rcard-info">
                   <div className="rcard-top">
-                    <span className="rcard-badge">CLIP {i + 1}</span>
+                    <span className="rcard-badge">{isAI ? "VIDEO IA" : `CLIP ${i + 1}`}</span>
                     <p className="rcard-title">{getSegmentTitle(seg, i)}</p>
                     <p className="rcard-reason">{seg?.reason || ""}</p>
                   </div>
                   <div className="rcard-bottom">
-                    <span className="rcard-meta">{duration} · 720p</span>
+                    <span className="rcard-meta">{duration ? `${duration} · ` : ""}720p</span>
                     <a
                       href={output}
                       download
@@ -375,32 +379,51 @@ export default function ResultsView({ job, url, onReset }: Props) {
                   </button>
                 </div>
                 <div className="preview-info-content">
-                  <span className="preview-clip-badge">CLIP {(preview ?? 0) + 1}</span>
-                  <h2 className="preview-clip-title">
-                    {getSegmentTitle(previewSeg || undefined, preview ?? 0)}
-                  </h2>
-                  <p className="preview-clip-reason">
-                    {previewSeg?.reason || "Segmento detectado automaticamente"}
-                  </p>
-                  <div className="preview-divider" />
-                  <div className="preview-meta-grid">
-                    <div className="preview-meta-row">
-                      <span className="preview-meta-label">Duracion</span>
-                      <span className="preview-meta-value">
-                        {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : "—"}
-                      </span>
-                    </div>
-                    <div className="preview-meta-row">
-                      <span className="preview-meta-label">Timestamp</span>
-                      <span className="preview-meta-value">
-                        {previewSeg ? `${formatTime(previewSeg.start)} → ${formatTime(previewSeg.end)}` : "—"}
-                      </span>
-                    </div>
-                    <div className="preview-meta-row">
-                      <span className="preview-meta-label">Resolucion</span>
-                      <span className="preview-meta-value">1080x1920 · 720p</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const isAI = previewSeg && previewSeg.start === 0 && previewSeg.end === 0;
+                    return (
+                      <>
+                        <span className="preview-clip-badge">
+                          {isAI ? "VIDEO IA" : `CLIP ${(preview ?? 0) + 1}`}
+                        </span>
+                        <h2 className="preview-clip-title">
+                          {getSegmentTitle(previewSeg || undefined, preview ?? 0)}
+                        </h2>
+                        <p className="preview-clip-reason">
+                          {previewSeg?.reason || "Segmento detectado automaticamente"}
+                        </p>
+                        <div className="preview-divider" />
+                        <div className="preview-meta-grid">
+                          {!isAI && (
+                            <>
+                              <div className="preview-meta-row">
+                                <span className="preview-meta-label">Duracion</span>
+                                <span className="preview-meta-value">
+                                  {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : "—"}
+                                </span>
+                              </div>
+                              <div className="preview-meta-row">
+                                <span className="preview-meta-label">Timestamp</span>
+                                <span className="preview-meta-value">
+                                  {previewSeg ? `${formatTime(previewSeg.start)} → ${formatTime(previewSeg.end)}` : "—"}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                          <div className="preview-meta-row">
+                            <span className="preview-meta-label">Resolucion</span>
+                            <span className="preview-meta-value">1080x1920 · 720p</span>
+                          </div>
+                          {isAI && (
+                            <div className="preview-meta-row">
+                              <span className="preview-meta-label">Tipo</span>
+                              <span className="preview-meta-value">Generado con IA</span>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
               <a href={previewOutput} download className="preview-dl-btn">
@@ -413,7 +436,11 @@ export default function ResultsView({ job, url, onReset }: Props) {
               <button className="preview-close-mobile" onClick={() => setPreview(null)}>
                 <X size={16} color="#fff" />
               </button>
-              <span className="preview-mobile-label">CLIP {(preview ?? 0) + 1} · {previewSeg ? formatTime(previewSeg.end - previewSeg.start) : ""} · 720p</span>
+              <span className="preview-mobile-label">
+                {previewSeg && previewSeg.start === 0 && previewSeg.end === 0
+                  ? `${getSegmentTitle(previewSeg, preview ?? 0).slice(0, 30)} · 720p`
+                  : `CLIP ${(preview ?? 0) + 1} · ${previewSeg ? formatTime(previewSeg.end - previewSeg.start) : ""} · 720p`}
+              </span>
               <a href={previewOutput} download className="preview-dl-mobile"><Download size={14} /> Descargar</a>
             </div>
           </div>

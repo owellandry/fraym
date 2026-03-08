@@ -17,7 +17,7 @@ async function processAIVideoJob(job: Job): Promise<void> {
 
   updateJob(id, { status: "processing", progress: 5, message: "Iniciando..." });
 
-  const { output, script } = await generateAIVideo(
+  const { output, script, title } = await generateAIVideo(
     {
       topic: job.aiOptions.topic,
       voice: job.aiOptions.voice,
@@ -34,6 +34,7 @@ async function processAIVideoJob(job: Job): Promise<void> {
     status: "done",
     progress: 100,
     outputs: [output],
+    segments: [{ start: 0, end: 0, title, reason: job.aiOptions.topic, score: 100 }],
     script,
     message: "Video generado",
   });

@@ -16,6 +16,20 @@ export interface AIVideoOptions {
   style: "story" | "facts" | "motivation" | "news";
 }
 
+// --- Generate viral title ---
+
+function generateTitle(script: string, topic: string): string {
+  // Extract a catchy title from the first sentence or topic
+  const firstLine = script.split(/[.\n!?]/)[0]?.trim() || "";
+  // If first line is short enough, use it as a hook-title
+  if (firstLine.length > 10 && firstLine.length <= 60) {
+    return firstLine;
+  }
+  // Otherwise, shorten the topic into a catchy title
+  const short = topic.length <= 50 ? topic : topic.slice(0, 47) + "...";
+  return short;
+}
+
 // --- Script generation with AI ---
 
 async function generateScript(topic: string, style: string): Promise<string> {
@@ -346,12 +360,14 @@ export async function generateAIVideo(
   options: AIVideoOptions,
   jobId: string,
   onProgress: (progress: number, message: string) => void
-): Promise<{ output: string; script: string }> {
+): Promise<{ output: string; script: string; title: string }> {
   await ensureDirs();
 
   // Step 1: Generate script (0% → 15%)
   onProgress(5, "Generando guion con IA...");
   const script = await generateScript(options.topic, options.style);
+  const title = generateTitle(script, options.topic);
+  logVideo.info("Titulo generado", title);
   onProgress(15, "Guion listo");
 
   // Step 2: Generate TTS audio (15% → 35%)
@@ -380,5 +396,5 @@ export async function generateAIVideo(
   const assPath = path.join(TMP_DIR, `${jobId}_ai_subs.ass`);
   await fs.unlink(assPath).catch(() => {});
 
-  return { output, script };
+  return { output, script, title };
 }
