@@ -377,8 +377,8 @@ async function composeVideo(
         if (trimmed.includes("time=") || trimmed.includes("frame=")) {
           // Only log every ~10s of progress to avoid spam
           const timeMatch = trimmed.match(/time=(\d+:\d+:\d+)/);
-          if (timeMatch && timeMatch[1] !== lastProgress) {
-            lastProgress = timeMatch[1];
+          if (timeMatch && timeMatch[1] && timeMatch[1] !== lastProgress) {
+            lastProgress = timeMatch[1]!
             logVideo.info("ffmpeg progress:", lastProgress);
           }
         } else if (trimmed && !trimmed.startsWith("frame=") && trimmed.length > 5) {
