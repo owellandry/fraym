@@ -117,21 +117,23 @@ REGLAS ABSOLUTAS — LEE CADA UNA:
 - NO empieces con "Aqui tienes", "Vale", "Claro", "Titulo:", "Guion:", ni ninguna meta-introduccion. La PRIMERA palabra debe ser parte del gancho de la historia`;
 
   // Models prioritized: Spanish-fluent first, then large output capacity
-  // Avoid Chinese-native models first (stepfun) — they leak CJK characters in Spanish
+  // Avoid Chinese-native models (stepfun) — they leak CJK characters in Spanish
   const MODELS = [
     "nousresearch/hermes-3-llama-3.1-405b:free",        // 405B, excellent Spanish
     "meta-llama/llama-3.3-70b-instruct:free",            // 70B, great Spanish
     "qwen/qwen3-next-80b-a3b-instruct:free",             // 80B, good multilingual
     "google/gemma-3-27b-it:free",                         // 27B, solid Spanish
-    "mistralai/mistral-small-3.1-24b-instruct:free",     // 24B, trained on European languages
-    "openai/gpt-oss-120b:free",                           // 120B
+    "mistralai/mistral-small-3.1-24b-instruct:free",     // 24B, European languages
     "arcee-ai/trinity-large-preview:free",                // 131K context
     "arcee-ai/trinity-mini:free",                         // 131K context
     "nvidia/nemotron-3-nano-30b-a3b:free",                // 256K context
     "stepfun/step-3.5-flash:free",                        // 256K output — leaks CJK, last resort
   ];
 
-  for (const model of MODELS) {
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  for (let i = 0; i < MODELS.length; i++) {
+    const model = MODELS[i]!;
     logAI.info("Generando guion...", model);
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -149,6 +151,15 @@ REGLAS ABSOLUTAS — LEE CADA UNA:
           max_tokens: 16384,
         }),
       });
+
+      if (res.status === 429) {
+        // Rate limited — wait before trying next model
+        const retryAfter = parseInt(res.headers.get("retry-after") || "0") * 1000;
+        const waitMs = Math.max(retryAfter, 3000 + i * 2000); // escalating: 3s, 5s, 7s...
+        logAI.warn(`Rate limited (429), esperando ${(waitMs / 1000).toFixed(0)}s...`, model);
+        await sleep(waitMs);
+        continue;
+      }
 
       if (!res.ok) {
         logAI.warn(`Modelo fallido (${res.status})`, model);

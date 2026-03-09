@@ -38,6 +38,8 @@ export function getAvailableVoices() {
   });
 }
 
+const MAX_TTS_RETRIES = 4;
+
 export async function synthesize(
   text: string,
   jobId: string,
@@ -48,25 +50,40 @@ export async function synthesize(
 
   logVideo.step("Generando audio TTS...", voice);
 
-  const tts = new EdgeTTS();
-  await tts.synthesize(text, voice);
-  await tts.toFile(audioPath); // creates audioPath.mp3
+  let lastError: Error | null = null;
 
-  const mp3Path = `${audioPath}.mp3`;
+  for (let attempt = 1; attempt <= MAX_TTS_RETRIES; attempt++) {
+    try {
+      const tts = new EdgeTTS();
+      await tts.synthesize(text, voice);
+      await tts.toFile(audioPath); // creates audioPath.mp3
 
-  // Get precise word timing from TTS engine
-  const boundaries = tts.getWordBoundaries() || [];
-  const TICKS_TO_SEC = 10_000_000; // 1 tick = 100 nanoseconds
+      const mp3Path = `${audioPath}.mp3`;
 
-  const words: WordTiming[] = boundaries.map((wb: any) => ({
-    text: wb.text,
-    start: wb.offset / TICKS_TO_SEC,
-    end: (wb.offset + wb.duration) / TICKS_TO_SEC,
-  }));
+      // Get precise word timing from TTS engine
+      const boundaries = tts.getWordBoundaries() || [];
+      const TICKS_TO_SEC = 10_000_000; // 1 tick = 100 nanoseconds
 
-  // Verify file exists
-  const stat = await fs.stat(mp3Path);
-  logVideo.success("Audio TTS generado", `${(stat.size / 1024).toFixed(0)}KB · ${words.length} palabras`);
+      const words: WordTiming[] = boundaries.map((wb: any) => ({
+        text: wb.text,
+        start: wb.offset / TICKS_TO_SEC,
+        end: (wb.offset + wb.duration) / TICKS_TO_SEC,
+      }));
 
-  return { audioPath: mp3Path, words };
+      // Verify file exists
+      const stat = await fs.stat(mp3Path);
+      logVideo.success("Audio TTS generado", `${(stat.size / 1024).toFixed(0)}KB · ${words.length} palabras`);
+
+      return { audioPath: mp3Path, words };
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < MAX_TTS_RETRIES) {
+        const waitSec = attempt * 3; // 3s, 6s, 9s
+        logVideo.warn(`TTS intento ${attempt} fallido (${err.message}), reintentando en ${waitSec}s...`);
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+      }
+    }
+  }
+
+  throw new Error(`TTS fallido despues de ${MAX_TTS_RETRIES} intentos: ${lastError?.message}`);
 }
