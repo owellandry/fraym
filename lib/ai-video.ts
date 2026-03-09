@@ -116,18 +116,19 @@ REGLAS ABSOLUTAS — LEE CADA UNA:
 - Escribe UNICAMENTE el texto del guion. NADA mas
 - NO empieces con "Aqui tienes", "Vale", "Claro", "Titulo:", "Guion:", ni ninguna meta-introduccion. La PRIMERA palabra debe ser parte del gancho de la historia`;
 
-  // Models prioritized by output capacity (large output first)
+  // Models prioritized: Spanish-fluent first, then large output capacity
+  // Avoid Chinese-native models first (stepfun) — they leak CJK characters in Spanish
   const MODELS = [
-    "stepfun/step-3.5-flash:free",                      // 256K output — best for long scripts
-    "nvidia/nemotron-3-nano-30b-a3b:free",               // 256K context
-    "arcee-ai/trinity-large-preview:free",               // 131K context
-    "arcee-ai/trinity-mini:free",                        // 131K context
-    "qwen/qwen3-next-80b-a3b-instruct:free",
-    "openai/gpt-oss-120b:free",
-    "nousresearch/hermes-3-llama-3.1-405b:free",
-    "google/gemma-3-27b-it:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",        // 405B, excellent Spanish
+    "meta-llama/llama-3.3-70b-instruct:free",            // 70B, great Spanish
+    "qwen/qwen3-next-80b-a3b-instruct:free",             // 80B, good multilingual
+    "google/gemma-3-27b-it:free",                         // 27B, solid Spanish
+    "mistralai/mistral-small-3.1-24b-instruct:free",     // 24B, trained on European languages
+    "openai/gpt-oss-120b:free",                           // 120B
+    "arcee-ai/trinity-large-preview:free",                // 131K context
+    "arcee-ai/trinity-mini:free",                         // 131K context
+    "nvidia/nemotron-3-nano-30b-a3b:free",                // 256K context
+    "stepfun/step-3.5-flash:free",                        // 256K output — leaks CJK, last resort
   ];
 
   for (const model of MODELS) {
@@ -170,9 +171,23 @@ REGLAS ABSOLUTAS — LEE CADA UNA:
           // Remove lines that are just labels like "Guion:", "Historia:", etc.
           .replace(/^\s*(guion|historia|texto|script|narración|título|title)\s*[:]\s*\n?/gim, "")
           .replace(/^\s*---+\s*$/gm, "")
+          // Remove CJK characters and AI self-correction loops
+          .replace(/[\u2E80-\u9FFF\uF900-\uFAFF]/g, "")                         // strip CJK chars
+          .replace(/\(esto es un error[^)]*\)/gi, "")                             // remove "(esto es un error...)"
+          .replace(/\([^)]*es chino[^)]*\)/gi, "")                                // remove "(... es chino ...)"
+          .replace(/\([^)]*quitadlo[^)]*\)/gi, "")                                // remove "(... quitadlo ...)"
+          .replace(/([""][^""]*[""][\s,]*no\s+(sé|se)[^.!?\n]*){2,}/gi, "")       // remove repetitive correction loops
+          .replace(/\s{2,}/g, " ")                                                 // collapse multiple spaces
           .trim();
 
         const wordCount = cleaned.split(/\s+/).length;
+
+        // Reject scripts with too many non-Latin characters (model leaked CJK)
+        const cjkCount = (content.match(/[\u2E80-\u9FFF\uF900-\uFAFF]/g) || []).length;
+        if (cjkCount > 5) {
+          logAI.warn(`Guion contiene ${cjkCount} caracteres CJK, modelo no apto para español`, model);
+          continue;
+        }
 
         // Reject scripts that are too short — try next model
         if (wordCount < 600) {
@@ -211,6 +226,34 @@ async function getAudioDuration(audioPath: string): Promise<number> {
       else reject(new Error("ffprobe failed on audio"));
     });
     proc.on("error", () => reject(new Error("ffprobe not found")));
+  });
+}
+
+// --- Re-mux a potentially truncated video to fix container ---
+
+async function remuxVideo(input: string, output: string, maxDuration: number): Promise<void> {
+  logVideo.step("Re-muxing fondo...", `max ${Math.round(maxDuration)}s`);
+  return new Promise((resolve, reject) => {
+    const args = [
+      "-i", input,
+      "-t", Math.ceil(maxDuration + 10).toString(), // trim to needed length + buffer
+      "-c", "copy",         // no re-encode, just fix container
+      "-movflags", "+faststart",
+      "-y", output,
+    ];
+    const proc = spawn(FFMPEG, args);
+    let stderr = "";
+    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+    proc.on("close", (code) => {
+      if (code === 0) {
+        logVideo.success("Fondo re-muxed OK");
+        resolve();
+      } else {
+        logVideo.error("Re-mux failed:", stderr.slice(-300));
+        reject(new Error(`ffmpeg remux failed: ${stderr.slice(-300)}`));
+      }
+    });
+    proc.on("error", () => reject(new Error("ffmpeg not found for remux")));
   });
 }
 
@@ -255,8 +298,8 @@ async function composeVideo(
     "-map", "0:v:0",                    // video from background
     "-map", "1:a:0",                    // audio from TTS
     "-c:v", "libx264",
-    "-preset", "fast",
-    "-crf", "21",
+    "-preset", audioDuration > 180 ? "ultrafast" : "fast", // ultrafast for long videos to avoid OOM
+    "-crf", audioDuration > 180 ? "23" : "21",
     "-c:a", "aac",
     "-b:a", "192k",
     "-movflags", "+faststart",
@@ -266,16 +309,53 @@ async function composeVideo(
   );
 
   logVideo.step("Componiendo video final...", `${Math.round(audioDuration)}s`);
+  logVideo.info("ffmpeg args:", args.join(" "));
 
   return new Promise((resolve, reject) => {
     const proc = spawn(FFMPEG, args);
     let stderr = "";
-    proc.stderr.on("data", d => { stderr += d.toString(); });
-    proc.on("close", code => {
-      if (code === 0) resolve(`/api/outputs?file=${outputName}`);
-      else reject(new Error(`ffmpeg compose failed: ${stderr.slice(-300)}`));
+    let lastProgress = "";
+
+    proc.stderr.on("data", (d: Buffer) => {
+      const chunk = d.toString();
+      stderr += chunk;
+
+      // Log ffmpeg progress lines (contain "time=" or "frame=")
+      const lines = chunk.split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.includes("time=") || trimmed.includes("frame=")) {
+          // Only log every ~10s of progress to avoid spam
+          const timeMatch = trimmed.match(/time=(\d+:\d+:\d+)/);
+          if (timeMatch && timeMatch[1] !== lastProgress) {
+            lastProgress = timeMatch[1];
+            logVideo.info("ffmpeg progress:", lastProgress);
+          }
+        } else if (trimmed && !trimmed.startsWith("frame=") && trimmed.length > 5) {
+          // Log any non-progress stderr (errors, warnings)
+          logVideo.warn("ffmpeg stderr:", trimmed.slice(0, 200));
+        }
+      }
     });
-    proc.on("error", () => reject(new Error("ffmpeg not found")));
+
+    proc.on("close", (code, signal) => {
+      if (code === 0) {
+        logVideo.success("Video compuesto", outputName);
+        resolve(`/api/outputs?file=${outputName}`);
+      } else {
+        const reason = signal
+          ? `killed by signal ${signal} (likely OOM)`
+          : `exit code ${code}`;
+        logVideo.error(`ffmpeg compose failed: ${reason}`);
+        logVideo.error("ffmpeg last stderr:", stderr.slice(-500));
+        reject(new Error(`ffmpeg compose failed (${reason}): ${stderr.slice(-300)}`));
+      }
+    });
+
+    proc.on("error", (err) => {
+      logVideo.error("ffmpeg spawn error:", err.message);
+      reject(new Error(`ffmpeg not found: ${err.message}`));
+    });
   });
 }
 
@@ -380,14 +460,29 @@ export async function generateAIVideo(
 
   // Step 3: Download background video (35% → 60%)
   onProgress(40, "Descargando video de fondo...");
+  const bgRawPath = path.join(TMP_DIR, `${jobId}_bg_raw.mp4`);
   const bgPath = path.join(TMP_DIR, `${jobId}_bg.mp4`);
   let bg: { path: string; duration: number };
   if (options.background === "parkour") {
     // Free YT parkour videos (OrbitalNCG, no copyright)
-    bg = await downloadYTBackground(audioDuration, bgPath);
+    bg = await downloadYTBackground(audioDuration, bgRawPath);
   } else {
     // Pexels stock videos for other categories
-    bg = await downloadBackground(options.background, audioDuration, bgPath);
+    bg = await downloadBackground(options.background, audioDuration, bgRawPath);
+  }
+
+  // Re-mux downloaded video to fix potentially truncated/corrupt container
+  onProgress(55, "Preparando video de fondo...");
+  await remuxVideo(bgRawPath, bgPath, audioDuration);
+  await fs.unlink(bgRawPath).catch(() => {});
+  bg.path = bgPath;
+
+  // Get actual background duration via ffprobe
+  try {
+    bg.duration = await getAudioDuration(bgPath);
+    logVideo.info("Duracion real del fondo", `${bg.duration.toFixed(1)}s`);
+  } catch {
+    logVideo.warn("No se pudo leer duracion del fondo, usando estimada");
   }
   onProgress(60, "Fondo descargado");
 
