@@ -93,36 +93,86 @@ export function useJob() {
   const reset = useCallback(() => {
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
+    stopPolling();
+    jobIdRef.current = null;
     setJob(INITIAL_STATE);
     setUrl("");
     setTopic("");
   }, []);
 
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const jobIdRef = useRef<string | null>(null);
+
+  function stopPolling() {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }
+
+  function applyJobData(data: any) {
+    setJob({
+      status: data.status,
+      progress: data.progress,
+      message: data.message,
+      segments: data.segments || [],
+      outputs: data.outputs || [],
+      script: data.script,
+      error: data.error,
+    });
+    return data.status === "done" || data.status === "error";
+  }
+
+  // Polling fallback — fetches job status via GET every 3s
+  function startPolling(id: string) {
+    stopPolling();
+    console.log(`[fraym] polling started for ${id}`);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/jobs?id=${id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const finished = applyJobData(data);
+        if (finished) {
+          console.log(`[fraym] job ${id} finished via polling: ${data.status}`);
+          stopPolling();
+          jobIdRef.current = null;
+        }
+      } catch {}
+    }, 3000);
+  }
+
   function connectSSE(id: string) {
+    jobIdRef.current = id;
     const sse = new EventSource(`/api/jobs/status?id=${id}`);
     eventSourceRef.current = sse;
+    console.log(`[fraym] SSE connected for ${id}`);
 
     sse.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setJob({
-        status: data.status,
-        progress: data.progress,
-        message: data.message,
-        segments: data.segments || [],
-        outputs: data.outputs || [],
-        script: data.script,
-        error: data.error,
-      });
-
-      if (data.status === "done" || data.status === "error") {
-        sse.close();
-        eventSourceRef.current = null;
+      try {
+        const data = JSON.parse(event.data);
+        console.log(`[fraym] SSE: ${data.status} ${data.progress}% — ${data.message}`);
+        const finished = applyJobData(data);
+        if (finished) {
+          console.log(`[fraym] job ${id} finished: ${data.status}`);
+          sse.close();
+          eventSourceRef.current = null;
+          stopPolling();
+          jobIdRef.current = null;
+        }
+      } catch (err) {
+        console.warn("[fraym] SSE parse error", err);
       }
     };
 
     sse.onerror = () => {
+      console.warn("[fraym] SSE connection lost, switching to polling");
       sse.close();
       eventSourceRef.current = null;
+      // Don't give up — fall back to polling
+      if (jobIdRef.current) {
+        startPolling(jobIdRef.current);
+      }
     };
   }
 
@@ -195,7 +245,10 @@ export function useJob() {
   }
 
   useEffect(() => {
-    return () => { eventSourceRef.current?.close(); };
+    return () => {
+      eventSourceRef.current?.close();
+      stopPolling();
+    };
   }, []);
 
   return {
