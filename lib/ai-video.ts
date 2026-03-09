@@ -20,15 +20,27 @@ export interface AIVideoOptions {
 // --- Generate viral title ---
 
 function generateTitle(script: string, topic: string): string {
-  // Extract a catchy title from the first sentence or topic
+  // Split script into sentences and find the most impactful one for a title
+  const sentences = script
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 15 && s.length <= 65);
+
+  // Prefer sentences with drama/tension keywords
+  const hookWords = /nunca|jamás|increíble|imposible|secreto|verdad|descubr|revel|muerte|muer|sangre|traicion|mentir|destruy|última|peor|mejor|nadie|todo cambió/i;
+  const hookSentence = sentences.find(s => hookWords.test(s));
+  if (hookSentence) {
+    return hookSentence.replace(/[.!?]+$/, "");
+  }
+
+  // Fallback: first sentence if short enough
   const firstLine = script.split(/[.\n!?]/)[0]?.trim() || "";
-  // If first line is short enough, use it as a hook-title
-  if (firstLine.length > 10 && firstLine.length <= 60) {
+  if (firstLine.length > 15 && firstLine.length <= 60) {
     return firstLine;
   }
-  // Otherwise, shorten the topic into a catchy title
-  const short = topic.length <= 50 ? topic : topic.slice(0, 47) + "...";
-  return short;
+
+  // Last resort: topic
+  return topic.length <= 50 ? topic : topic.slice(0, 47) + "...";
 }
 
 // --- Script generation with AI ---
@@ -114,7 +126,11 @@ REGLAS ABSOLUTAS — LEE CADA UNA:
 - NO escribas titulos ni encabezados, solo el texto narrado continuo
 - Termina con algo que el oyente NO pueda olvidar
 - Escribe UNICAMENTE el texto del guion. NADA mas
-- NO empieces con "Aqui tienes", "Vale", "Claro", "Titulo:", "Guion:", ni ninguna meta-introduccion. La PRIMERA palabra debe ser parte del gancho de la historia`;
+- NO empieces con "Aqui tienes", "Vale", "Claro", "Titulo:", "Guion:", ni ninguna meta-introduccion. La PRIMERA palabra debe ser parte del gancho de la historia
+- GROSERIAS: puedes usar lenguaje fuerte pero MODERADO (idiota, pendejo, cabron, maldito, imbecil, carajo, demonios, mierda). NUNCA uses insultos sexuales explícitos ni palabras como puto, puta, emp*tado, verga, coger, ni slurs. El audio sera narrado por una voz sintetica y debe sonar natural sin cruzar la linea
+- EVITA repetir la misma idea o descripcion mas de una vez. Si ya describiste algo, avanza la historia. Nada de loops narrativos
+- Incluye MINIMO 2 giros argumentales inesperados que cambien la direccion de la historia. El oyente debe decir "no me esperaba eso"
+- El climax debe ser un momento CONCRETO y dramatico, no una reflexion abstracta. Algo PASA, alguien HACE algo, se revela algo ESPECIFICO`;
 
   // Models prioritized: Spanish-fluent first, then large output capacity
   // Avoid Chinese-native models (stepfun) — they leak CJK characters in Spanish
@@ -288,13 +304,34 @@ async function composeVideo(
 
   // Build ffmpeg command:
   // 1. Loop/trim background video to match audio duration
-  // 2. Scale to 1080x1920 (portrait)
-  // 3. Overlay subtitles
-  // 4. Mix with TTS audio
+  // 2. Anti-detection: hflip + speed shift + color shift + grain
+  // 3. Scale to 1080x1920 (portrait)
+  // 4. Overlay subtitles
+  // 5. Strip metadata
+  // 6. Mix with TTS audio
   const escapedAss = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
 
   // If background is shorter than audio, loop it
   const needsLoop = bgDuration < audioDuration;
+
+  // Random anti-detection parameters (vary per video)
+  const speedFactor = 1.03 + Math.random() * 0.04;    // 1.03x – 1.07x
+  const hueShift = Math.floor(5 + Math.random() * 15); // 5° – 20° hue rotation
+  const satBoost = (1.05 + Math.random() * 0.15).toFixed(2); // 1.05 – 1.20
+  const brightness = (Math.random() > 0.5 ? 0.02 : -0.02).toFixed(2); // slight +/- brightness
+
+  // Video filter chain: anti-detection → scale → subtitles
+  const vf = [
+    `setpts=${(1 / speedFactor).toFixed(4)}*PTS`,       // slight speed up
+    "hflip",                                              // mirror
+    `hue=h=${hueShift}:s=${satBoost}:b=${brightness}`,   // color shift
+    "noise=c0s=3:c0f=t",                                  // subtle film grain
+    "scale=1080:1920:force_original_aspect_ratio=increase",
+    "crop=1080:1920",
+    `ass='${escapedAss}'`,
+  ].join(",");
+
+  logVideo.info("Anti-deteccion:", `speed=${speedFactor.toFixed(2)}x hue=${hueShift}° sat=${satBoost} grain=3`);
 
   const args: string[] = [];
 
@@ -305,7 +342,7 @@ async function composeVideo(
   args.push("-i", audioPath);           // input 1: TTS audio
   args.push("-t", audioDuration.toFixed(2)); // trim to audio length
   args.push(
-    "-vf", `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass='${escapedAss}'`,
+    "-vf", vf,
     "-map", "0:v:0",                    // video from background
     "-map", "1:a:0",                    // audio from TTS
     "-c:v", "libx264",
@@ -313,6 +350,8 @@ async function composeVideo(
     "-crf", audioDuration > 180 ? "23" : "21",
     "-c:a", "aac",
     "-b:a", "192k",
+    "-map_metadata", "-1",              // strip all metadata
+    "-fflags", "+bitexact",             // deterministic output, no fingerprint leaks
     "-movflags", "+faststart",
     "-shortest",
     "-y",
